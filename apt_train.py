@@ -37,6 +37,9 @@ model.tokenizer = tokenizer
 pytorch_total_params = sum(p.numel() for p in model.parameters())
 print(f"Total number of parameters in model: {pytorch_total_params:,}")
 
+for name, param in model.named_parameters():
+    print(name, param.shape)
+
 
 
 # HYPERPARAMETERS AND UTILITIES FOR TRAINING, EVAL DATASET PREP
