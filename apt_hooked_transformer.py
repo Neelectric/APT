@@ -1,11 +1,9 @@
-# Let's train a Sum Pretrained Transformer with Neel Nanda's librar
+# Let's train a Sum Pretrained Transformer with Neel Nanda's library
 # System imports
 
 # External imports
 import torch
 from tqdm import tqdm
-import matplotlib.pyplot as plt
-from matplotlib.ticker import MultipleLocator
 import transformer_lens
 import transformer_lens.utils as utils
 from transformer_lens.hook_points import (
@@ -15,8 +13,8 @@ from transformer_lens.hook_points import (
 from transformer_lens import HookedTransformer, HookedTransformerConfig, FactoredMatrix, ActivationCache
 
 # Local imports
-from sum_pretrained_transformer import SPT, SPTConfig, DataLoaderLite
-from spt_tokenizer import SPTTokenizer
+from arithmetic_pretrained_transformer import APT, APTConfig, DataLoaderLite
+from apt_tokenizer import APTTokenizer
 
 # Environment prep
 torch.manual_seed(42)

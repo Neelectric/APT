@@ -5,7 +5,7 @@ from typing import Optional, Tuple, Dict, Union
 
 from transformers import PreTrainedTokenizer
 
-class SPTTokenizer(PreTrainedTokenizer):
+class APTTokenizer(PreTrainedTokenizer):
     def __init__(self, vocab: Union[Dict[str, int], str], max_len: int = None):
         if isinstance(vocab, str):
             vocab_path = Path(vocab)
@@ -75,7 +75,7 @@ model_max_len = 10
 vocab_path = 'tokenizer/vocab.json'
 
 # You can either pass the custom vocab dictionary or the path to the vocab file
-tokenizer = SPTTokenizer(vocab_path, max_len=model_max_len)
+tokenizer = APTTokenizer(vocab_path, max_len=model_max_len)
 
 res = tokenizer(
     [

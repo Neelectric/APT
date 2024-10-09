@@ -6,8 +6,8 @@ import torch
 from tqdm import tqdm
 
 # Local imports
-from sum_pretrained_transformer import SPT, SPTConfig, DataLoaderLite
-from spt_tokenizer import SPTTokenizer
+from arithmetic_pretrained_transformer import APT, APTConfig, DataLoaderLite
+from apt_tokenizer import APTTokenizer
 
 # Environment prep
 torch.manual_seed(42)
@@ -27,11 +27,11 @@ print(f"using device {device}")
 
 
 # MODEL SETUP
-model = SPT(SPTConfig())
+model = APT(APTConfig())
 model.to(device)
 model.device = device
 vocab_path = 'tokenizer/vocab.json'
-tokenizer = SPTTokenizer(vocab_path)
+tokenizer = APTTokenizer(vocab_path)
 model.tokenizer = tokenizer
 
 pytorch_total_params = sum(p.numel() for p in model.parameters())
@@ -71,7 +71,7 @@ def eval_naive(print_incorrect=False):
             print(ground_truth, prediction)
     EM_score = num_correct/len(eval_prompts)
     if print_incorrect:
-        print(f"Out of {len(eval_prompts)} questions, SPT got {num_correct} correct.")
+        print(f"Out of {len(eval_prompts)} questions, APT got {num_correct} correct.")
     return EM_score
 
 
