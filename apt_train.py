@@ -108,38 +108,3 @@ writer.close()
     
 final_em_score_reading = eval_naive(print_incorrect=True) * 100
 print(f"step {step}, train loss: {loss.item():.4f}, eval accuracy (EM): {final_em_score_reading:.2f}%") 
-
-
-# # PLOT
-# fig, ax1 = plt.subplots(figsize=(10, 5))
-    
-# # Plot losses on the left y-axis
-# ax1.plot(accuracy_steps, losses, label='Losses', color='blue')
-# ax1.set_xlabel('Steps')
-# ax1.set_ylabel('Losses', color='blue')
-# ax1.tick_params(axis='y', labelcolor='blue')
-
-# # Create a secondary y-axis for accuracies
-# ax2 = ax1.twinx()
-# ax2.plot(accuracy_steps, accuracies, label='Accuracies', color='green', linestyle='-', marker='o')
-# ax2.set_ylabel('Accuracies (%)', color='green')
-# ax2.tick_params(axis='y', labelcolor='green')
-
-# # Set y-ticks frequency for the right y-axis
-# ax2.yaxis.set_major_locator(MultipleLocator(5))
-
-# # Add grid
-# # ax1.grid(True)
-# ax2.grid(True)
-
-# # Combine legends
-# lines, labels = ax1.get_legend_handles_labels()
-# lines2, labels2 = ax2.get_legend_handles_labels()
-# ax1.legend(lines + lines2, labels + labels2, loc='upper left')
-
-
-# # Add title
-# plt.title('Training Losses and Accuracies')
-
-# # Display the plot
-# plt.show()
