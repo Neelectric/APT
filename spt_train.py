@@ -4,8 +4,6 @@
 # External imports
 import torch
 from tqdm import tqdm
-import matplotlib.pyplot as plt
-from matplotlib.ticker import MultipleLocator
 
 # Local imports
 from sum_pretrained_transformer import SPT, SPTConfig, DataLoaderLite
