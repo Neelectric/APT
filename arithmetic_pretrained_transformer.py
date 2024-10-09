@@ -78,10 +78,9 @@ class Block(nn.Module):
 class APTConfig:
     block_size: int = 10
     vocab_size: int = 17
-    print(f"VOCAB SIZE IS AT {vocab_size}")
     n_layer: int = 1
     n_head: int = 4
-    n_embd: int = 4 #512 seems to work well. 256 can also generalize w bsz=< 1024. 128 or 64 works with 256 bsz and lr 8e-4. for 32 we need lr 8e-3. for 8 or 16 we need lr 1e-2. actually for 8, 12e-3 seems ideal. for 4, 20e-3 could work
+    n_embd: int = 4 #512 seems to work well. 256 can also generalize w bsz=< 1024. 128 or 64 works with 256 bsz and lr 8e-4. for 32 we need lr 8e-3. for 8 or 16 we need lr 1e-2. actually for 8, 12e-3 seems ideal. for 4, 20e-3 or even 208e-4 could work
 
 class APT(nn.Module):
 

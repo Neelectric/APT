@@ -1,5 +1,7 @@
 # Let's train a Sum Pretrained Transformer
 # System imports
+import time
+import os
 
 # External imports
 import torch
@@ -31,8 +33,11 @@ print(f"using device {device}")
 vocab_path = 'tokenizer/sum_0-9_vocab.json'
 tokenizer = APTTokenizer(vocab_path)
 config = APTConfig(vocab_size=len(tokenizer._id_tokens),
-                   n_embd=8,
+                   n_layer=1,
+                   n_head=2,
+                   n_embd=4,
                    )
+print(f"VOCAB SIZE IS {config.vocab_size}")
 model = APT(config)
 model.to(device)
 model.device = device
@@ -51,11 +56,11 @@ batch_size = 2048 #1024 works?
 num_tokens_per_sample = 10
 data_location = 'datasets/sum_dataset.json'
 train_loader = DataLoaderLite(B=batch_size, T=num_tokens_per_sample, data_location='datasets/sum_dataset.json', tokenizer=tokenizer)
-learning_rate = 208e-4
+learning_rate = 12e-3 * 3.1
 trainset_size = train_loader.trainset_size
-epochs = 3000
+epochs = int(6000 * 10)
 max_steps = epochs * (trainset_size) // batch_size
-eval_intervals = max_steps // 16
+eval_intervals = max_steps // 8
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate) # easy gains: decrease weights for different language tokens!
 print(f"max_steps: {max_steps}, eval_intervals: {eval_intervals}, learning_rate: {learning_rate}")
 
@@ -96,13 +101,14 @@ for step in tqdm(range(max_steps), dynamic_ncols=True):
     logits, loss = model(x, y)
     writer.add_scalar("Loss/train", loss, step)
     loss.backward() # this adds to gradients! which is why we need to zero_grad
+    norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
     optimizer.step() # this actually updates the params
     if step % eval_intervals == 0:
         em_score_reading = eval_naive() * 100
         # print(x[0])
         # print(y[0])
         # print(logits[0][6:8])
-        tqdm.write(f"step {step}, train loss: {loss.item():.4f}, eval accuracy (EM): {em_score_reading:.2f}%") #we use .item() because this is a tensor with a single element that lives on .device. .item() sends it to cpu
+        tqdm.write(f"step {step} | loss: {loss.item():.4f} | norm: {norm:.3f}| eval accuracy (EM): {em_score_reading:.2f}%") #we use .item() because this is a tensor with a single element that lives on .device. .item() sends it to cpu
         accuracies.append(em_score_reading)
         accuracy_steps.append(step)
         losses.append(loss.item())
