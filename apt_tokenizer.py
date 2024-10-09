@@ -13,20 +13,24 @@ class APTTokenizer(PreTrainedTokenizer):
                 self._token_ids = json.load(f)
         else:
             self._token_ids = vocab
-            
-        self._id_tokens: Dict[int, str] = {value: key for key, value in self._token_ids.items()}
+        id_to_token = {value: key for key, value in self._token_ids.items()}
+        self._id_tokens = id_to_token
         super().__init__(max_len=max_len)
-
-        self.unk_token = '<unk>'
-        self.pad_token = '<pad>'
-        self.bos_token = '<bos>'
-        self.eos_token = '<eos>'
-        self.mask_token = '<mask>'
-        self.unk_token_id = self._token_ids.get(self.unk_token, 0)
-        self.pad_token_id = self._token_ids.get(self.pad_token, 1)
-        self.bos_token_id = self._token_ids.get(self.bos_token, 2)
-        self.eos_token_id = self._token_ids.get(self.eos_token, 3)
-        self.mask_token_id = self._token_ids.get(self.mask_token, 4)
+        if "<unk>" in id_to_token.values():
+            self.unk_token = '<unk>'
+            self.unk_token_id = self._token_ids.get(self.unk_token, 0)
+        if "<pad>" in id_to_token.values():
+            self.pad_token = '<pad>'
+            self.pad_token_id = self._token_ids.get(self.pad_token, 1)
+        if "<bos>" in id_to_token.values():
+            self.bos_token = '<bos>'
+            self.bos_token_id = self._token_ids.get(self.bos_token, 2)
+        if "<eos>" in id_to_token.values():
+            self.eos_token = '<eos>'
+            self.eos_token_id = self._token_ids.get(self.eos_token, 3)
+        if "<mask>" in id_to_token.values():
+            self.mask_token = '<mask>'
+            self.mask_token_id = self._token_ids.get(self.mask_token, 4)
 
     def _tokenize(self, text: str, **kwargs):
         return text.split(' ')
@@ -68,21 +72,27 @@ class APTTokenizer(PreTrainedTokenizer):
 #     json.dump(char_to_id, f)
 
 # print(char_to_id)
-sum_string_ex = "<bos>18+19=37<eos>"
-model_max_len = 10
 
-# Optionally specify the path to a vocab file
-vocab_path = 'tokenizer/vocab.json'
 
-# You can either pass the custom vocab dictionary or the path to the vocab file
-tokenizer = APTTokenizer(vocab_path, max_len=model_max_len)
 
-res = tokenizer(
-    [
-        "<bos> 1 8 + 1 9 = 3 7 <eos>",
-        "<bos> 2 + 4 3 = 4 5 <eos>",
-    ],
-    padding=True,
-    truncation=True,
-)
-print(res)
+
+
+
+# sum_string_ex = "<bos>18+19=37<eos>"
+# model_max_len = 10
+
+# # Optionally specify the path to a vocab file
+# vocab_path = 'tokenizer/sum_0-9+special_vocab.json'
+
+# # You can either pass the custom vocab dictionary or the path to the vocab file
+# tokenizer = APTTokenizer(vocab_path, max_len=model_max_len)
+
+# res = tokenizer(
+#     [
+#         "<bos> 1 8 + 1 9 = 3 7 <eos>",
+#         "<bos> 2 + 4 3 = 4 5 <eos>",
+#     ],
+#     # padding=True,
+#     truncation=True,
+# )
+# print(res)

@@ -27,11 +27,15 @@ print(f"using device {device}")
 
 
 # MODEL SETUP
-model = APT(APTConfig())
+
+vocab_path = 'tokenizer/sum_0-9_vocab.json'
+tokenizer = APTTokenizer(vocab_path)
+config = APTConfig(vocab_size=len(tokenizer._id_tokens),
+                   n_embd=8,
+                   )
+model = APT(config)
 model.to(device)
 model.device = device
-vocab_path = 'tokenizer/vocab.json'
-tokenizer = APTTokenizer(vocab_path)
 model.tokenizer = tokenizer
 
 pytorch_total_params = sum(p.numel() for p in model.parameters())
@@ -46,7 +50,7 @@ for name, param in model.named_parameters():
 batch_size = 2048 #1024 works?
 num_tokens_per_sample = 10
 data_location = 'datasets/sum_dataset.json'
-train_loader = DataLoaderLite(B=batch_size, T=num_tokens_per_sample, data_location='datasets/sum_dataset.json')
+train_loader = DataLoaderLite(B=batch_size, T=num_tokens_per_sample, data_location='datasets/sum_dataset.json', tokenizer=tokenizer)
 learning_rate = 208e-4
 trainset_size = train_loader.trainset_size
 epochs = 3000

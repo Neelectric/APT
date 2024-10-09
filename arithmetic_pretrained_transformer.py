@@ -46,7 +46,6 @@ class CausalSelfAttention(nn.Module):
         y = self.c_proj(y)
         return y
 
-
 class MLP(nn.Module):
 
     def __init__(self, config):
@@ -75,7 +74,6 @@ class Block(nn.Module):
         x = x + self.mlp(self.ln_2(x))
         return x
         
-
 @dataclass
 class APTConfig:
     block_size: int = 10
@@ -147,11 +145,11 @@ class APT(nn.Module):
         return decoded
 
 class DataLoaderLite:
-    def __init__(self, B, T, data_location):
+    def __init__(self, B, T, data_location, tokenizer):
         self.B = B
         self.T = T
-        vocab_path = 'tokenizer/vocab.json'
-        tokenizer = APTTokenizer(vocab_path)
+        # vocab_path = 'tokenizer/vocab.json'
+        # tokenizer = APTTokenizer(vocab_path)
         with open(data_location, 'r') as f:
             text = json.load(f)
 
