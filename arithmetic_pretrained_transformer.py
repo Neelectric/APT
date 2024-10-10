@@ -9,6 +9,11 @@ from torch.nn import functional as F
 from apt_tokenizer import APTTokenizer
 import random
 
+torch.manual_seed(42)
+torch.cuda.manual_seed(42)
+torch.mps.manual_seed(42)
+random.seed(10)
+
 # -------------------------------------------- #
 
 class CausalSelfAttention(nn.Module):
@@ -17,9 +22,9 @@ class CausalSelfAttention(nn.Module):
         super().__init__()
         assert config.n_embd % config.n_head == 0
         # key, query and value projections for all heads, but batched!
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd)
+        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=False)
         # output projection
-        self.c_proj = nn.Linear(config.n_embd, config.n_embd)
+        self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=False)
         # regularization
         self.n_head = config.n_head
         self.n_embd = config.n_embd
@@ -50,9 +55,9 @@ class MLP(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd)
+        self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=False)
         self.gelu = nn.GELU(approximate='tanh') #gpt2 used tanh approximation, dan hendrycks suggested in github comment, nowadays irrelevant
-        self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd)
+        self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=False)
 
     def forward(self, x):
         x = self.c_fc(x)
@@ -64,9 +69,9 @@ class Block(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.ln_1 = nn.LayerNorm(config.n_embd)
+        self.ln_1 = nn.LayerNorm(config.n_embd, bias=False)
         self.attn = CausalSelfAttention(config)
-        self.ln_2 = nn.LayerNorm(config.n_embd)
+        self.ln_2 = nn.LayerNorm(config.n_embd, bias=False)
         self.mlp = MLP(config)
 
     def forward(self, x):
@@ -92,7 +97,7 @@ class APT(nn.Module):
             wte = nn.Embedding(config.vocab_size, config.n_embd), # weight token embeddings
             wpe = nn.Embedding(config.block_size, config.n_embd), # weight positional embeddings
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]), # layers
-            ln_f = nn.LayerNorm(config.n_embd), # final layernorm, introduced by GPT2 paper
+            ln_f = nn.LayerNorm(config.n_embd, bias=False), # final layernorm, introduced by GPT2 paper
         ))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False) # final classification head
 
@@ -119,28 +124,25 @@ class APT(nn.Module):
         if targets is not None:
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1)) # function does not like multi-dim tensors, so we flatten them to be BxT for all inputs and all targets
         return logits, loss
-        # return logits
 
     def generate(self, input_ids, max_length=10):
         while True:
-            if (len(input_ids) >= max_length) or (input_ids[-1] == 16):
+            if (input_ids.shape[1] >= max_length) or (input_ids[0][-1] == 16):
                 input_ids = input_ids.tolist()
                 return input_ids
-            logits = self(input_ids)
-            logits = logits[0]
+            logits, loss = self(input_ids)
             logits = logits[:, -1, :]
             probs = F.softmax(logits, dim=-1)
             topk_probs, topk_indices = torch.topk(probs, min(50, self.config.vocab_size), dim=-1)
             ix = torch.multinomial(topk_probs, 1)
-            xcol = torch.gather(topk_indices, -1, ix).squeeze(-1)
-            input_ids = torch.cat((input_ids, xcol), dim=0)
+            xcol = torch.gather(topk_indices, -1, ix)
+            input_ids = torch.cat((input_ids, xcol), dim=1)
     
     def answer(self, prompt, max_length=10):
-        tokens = self.tokenizer(prompt, return_tensors="pt")["input_ids"][0]
+        tokens = self.tokenizer(prompt, return_tensors="pt")["input_ids"]
         input_ids = tokens.to(self.device)
         output_ids = self.generate(input_ids, max_length=max_length)
-        decoded = self.tokenizer.decode(output_ids)
-        # print(decoded)
+        decoded = self.tokenizer.batch_decode(output_ids)
         return decoded
 
 class DataLoaderLite:

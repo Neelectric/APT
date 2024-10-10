@@ -34,7 +34,7 @@ vocab_path = 'tokenizer/sum_0-9_vocab.json'
 tokenizer = APTTokenizer(vocab_path)
 config = APTConfig(vocab_size=len(tokenizer._id_tokens),
                    n_layer=1,
-                   n_head=2,
+                   n_head=4,
                    n_embd=4,
                    )
 print(f"VOCAB SIZE IS {config.vocab_size}")
@@ -48,6 +48,7 @@ print(f"Total number of parameters in model: {pytorch_total_params:,}")
 
 for name, param in model.named_parameters():
     print(name, param.shape)
+    print(param, "\n")
 
 
 
@@ -56,11 +57,11 @@ batch_size = 2048 #1024 works?
 num_tokens_per_sample = 10
 data_location = 'datasets/sum_dataset.json'
 train_loader = DataLoaderLite(B=batch_size, T=num_tokens_per_sample, data_location='datasets/sum_dataset.json', tokenizer=tokenizer)
-learning_rate = 12e-3 * 3.1
+learning_rate = 12e-3 * 1
 trainset_size = train_loader.trainset_size
-epochs = int(6000 * 10)
+epochs = int(6000 * 3)
 max_steps = epochs * (trainset_size) // batch_size
-eval_intervals = max_steps // 8
+eval_intervals = max_steps // 10
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate) # easy gains: decrease weights for different language tokens!
 print(f"max_steps: {max_steps}, eval_intervals: {eval_intervals}, learning_rate: {learning_rate}")
 
@@ -73,10 +74,22 @@ for elt in train_loader.eval_raw:
     eval_ground_truths.append(elt)
 
 def eval_naive(print_incorrect=False):
-    # model.eval()
     num_correct = 0
     for prompt, ground_truth in tqdm(zip(eval_prompts, eval_ground_truths), dynamic_ncols=True, disable=True):
-        prediction = model.answer(prompt)
+        prediction = model.answer(prompt)[0]
+        if prediction == ground_truth:
+            num_correct += 1
+        elif print_incorrect:
+            print(ground_truth, prediction)
+    EM_score = num_correct/len(eval_prompts)
+    if print_incorrect:
+        print(f"Out of {len(eval_prompts)} questions, APT got {num_correct} correct.")
+    return EM_score
+
+def eval_parallel(print_incorrect=False):
+    num_correct = 0
+    predictions = model.answer(eval_prompts)
+    for prediction, ground_truth in tqdm(zip(predictions, eval_ground_truths), dynamic_ncols=True, disable=True):
         if prediction == ground_truth:
             num_correct += 1
         elif print_incorrect:
@@ -104,15 +117,15 @@ for step in tqdm(range(max_steps), dynamic_ncols=True):
     norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
     optimizer.step() # this actually updates the params
     if step % eval_intervals == 0:
-        em_score_reading = eval_naive() * 100
-        # print(x[0])
-        # print(y[0])
-        # print(logits[0][6:8])
-        tqdm.write(f"step {step} | loss: {loss.item():.4f} | norm: {norm:.3f}| eval accuracy (EM): {em_score_reading:.2f}%") #we use .item() because this is a tensor with a single element that lives on .device. .item() sends it to cpu
-        accuracies.append(em_score_reading)
-        accuracy_steps.append(step)
-        losses.append(loss.item())
-        writer.add_scalar("EM Score", em_score_reading, step)
+        with torch.no_grad():
+            model.eval()
+            # em_score_reading = eval_naive() * 100
+            em_score_reading_parallel = eval_parallel() * 100
+            tqdm.write(f"step {step} | loss: {loss.item():.4f} | norm: {norm:.3f}| EM (parallel): {em_score_reading_parallel:.2f}%") #we use .item() because this is a tensor with a single element that lives on .device. .item() sends it to cpu
+            accuracies.append(em_score_reading_parallel)
+            accuracy_steps.append(step)
+            losses.append(loss.item())
+            writer.add_scalar("EM Score", em_score_reading_parallel, step)
 graph_inputs = [x,y]
 writer.add_graph(model, graph_inputs)
 writer.flush()
@@ -121,3 +134,7 @@ writer.close()
     
 final_em_score_reading = eval_naive(print_incorrect=True) * 100
 print(f"step {step}, train loss: {loss.item():.4f}, eval accuracy (EM): {final_em_score_reading:.2f}%") 
+
+# for name, param in model.named_parameters():
+#     print(name, param.shape)
+#     print(param, "\n")
