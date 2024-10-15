@@ -166,6 +166,7 @@ class DataLoaderLite:
         print(f"loaded {len(self.tokens_train)} tokens")
         print(f"1 epoch = {len(self.tokens_train) // (B * T)} batches")
         self.current_position_train = 0
+        self.current_position_eval = 0
 
     def next_batch_train(self):
         B, T = self.B, self.T
@@ -181,6 +182,7 @@ class DataLoaderLite:
     
     def next_batch_eval(self):
         B, T = self.B, self.T
+        B = math.floor(2489/T)
         buf = self.tokens_eval[self.current_position_eval : self.current_position_eval + B*T + 1]
         x = (buf[:-1]).view(B, T) # inputs
         y = (buf[1:]).view(B, T) # targets

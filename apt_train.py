@@ -46,10 +46,9 @@ model.tokenizer = tokenizer
 pytorch_total_params = sum(p.numel() for p in model.parameters())
 print(f"Total number of parameters in model: {pytorch_total_params:,}")
 
-for name, param in model.named_parameters():
-    print(name, param.shape)
-    print(param, "\n")
-
+# for name, param in model.named_parameters():
+#     print(name, param.shape)
+#     print(param, "\n")
 
 
 # HYPERPARAMETERS AND UTILITIES FOR TRAINING, EVAL DATASET PREP
@@ -57,14 +56,13 @@ batch_size = 2048 #1024 works?
 num_tokens_per_sample = 10
 data_location = 'datasets/sum_dataset.json'
 train_loader = DataLoaderLite(B=batch_size, T=num_tokens_per_sample, data_location='datasets/sum_dataset.json', tokenizer=tokenizer)
-learning_rate = 12e-3 * 1
+learning_rate = 12e-3 * 0.5
 trainset_size = train_loader.trainset_size
-epochs = int(6000 * 3)
+epochs = int(6000 * 6)
 max_steps = epochs * (trainset_size) // batch_size
 eval_intervals = max_steps // 10
-optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate) # easy gains: decrease weights for different language tokens!
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01) # easy gains: decrease weights for different language tokens!
 print(f"max_steps: {max_steps}, eval_intervals: {eval_intervals}, learning_rate: {learning_rate}")
-
 
 
 eval_prompts = []
@@ -101,7 +99,8 @@ def eval_parallel(print_incorrect=False):
 
 
 # TRAINING BEGINS
-losses = []
+losses_train = []
+losses_eval = []
 accuracies = []
 accuracy_steps = []
 
@@ -114,27 +113,27 @@ for step in tqdm(range(max_steps), dynamic_ncols=True):
     logits, loss = model(x, y)
     writer.add_scalar("Loss/train", loss, step)
     loss.backward() # this adds to gradients! which is why we need to zero_grad
-    norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+    norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
     optimizer.step() # this actually updates the params
     if step % eval_intervals == 0:
         with torch.no_grad():
             model.eval()
             # em_score_reading = eval_naive() * 100
+            x_eval, y_eval = train_loader.next_batch_eval()
+            x_eval, y_eval = x_eval.to(device), y_eval.to(device)
+            logits_eval, loss_eval = model(x, y)
+            writer.add_scalar("Loss/eval", loss_eval, step)
             em_score_reading_parallel = eval_parallel() * 100
-            tqdm.write(f"step {step} | loss: {loss.item():.4f} | norm: {norm:.3f}| EM (parallel): {em_score_reading_parallel:.2f}%") #we use .item() because this is a tensor with a single element that lives on .device. .item() sends it to cpu
+            tqdm.write(f"step {step} | loss_train: {loss.item():.4f} | loss_eval: {loss_eval.item():.4f} | norm: {norm:.3f}| EM (parallel): {em_score_reading_parallel:.2f}%") #we use .item() because this is a tensor with a single element that lives on .device. .item() sends it to cpu
             accuracies.append(em_score_reading_parallel)
             accuracy_steps.append(step)
-            losses.append(loss.item())
+            losses_train.append(loss.item())
+            losses_eval.append(loss_eval.item())
             writer.add_scalar("EM Score", em_score_reading_parallel, step)
 graph_inputs = [x,y]
 writer.add_graph(model, graph_inputs)
 writer.flush()
 writer.close()
-
     
 final_em_score_reading = eval_naive(print_incorrect=True) * 100
 print(f"step {step}, train loss: {loss.item():.4f}, eval accuracy (EM): {final_em_score_reading:.2f}%") 
-
-# for name, param in model.named_parameters():
-#     print(name, param.shape)
-#     print(param, "\n")
