@@ -58,7 +58,7 @@ data_location = 'datasets/sum_dataset.json'
 train_loader = DataLoaderLite(B=batch_size, T=num_tokens_per_sample, data_location='datasets/sum_dataset.json', tokenizer=tokenizer)
 learning_rate = 12e-3 * 0.5
 trainset_size = train_loader.trainset_size
-epochs = int(6000 * 6)
+epochs = int(6000 * 3)
 max_steps = epochs * (trainset_size) // batch_size
 eval_intervals = max_steps // 10
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01) # easy gains: decrease weights for different language tokens!
@@ -124,6 +124,7 @@ for step in tqdm(range(max_steps), dynamic_ncols=True):
             logits_eval, loss_eval = model(x, y)
             writer.add_scalar("Loss/eval", loss_eval, step)
             em_score_reading_parallel = eval_parallel() * 100
+            # em_score_reading_parallel = eval_naive() * 100
             tqdm.write(f"step {step} | loss_train: {loss.item():.4f} | loss_eval: {loss_eval.item():.4f} | norm: {norm:.3f}| EM (parallel): {em_score_reading_parallel:.2f}%") #we use .item() because this is a tensor with a single element that lives on .device. .item() sends it to cpu
             accuracies.append(em_score_reading_parallel)
             accuracy_steps.append(step)

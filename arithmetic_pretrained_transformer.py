@@ -127,7 +127,7 @@ class APT(nn.Module):
 
     def generate(self, input_ids, max_length=10):
         while True:
-            if (input_ids.shape[1] >= max_length) or (input_ids[0][-1] == 16):
+            if (input_ids.shape[1] >= max_length) or (input_ids[0][-1] == 13):
                 input_ids = input_ids.tolist()
                 return input_ids
             logits, loss = self(input_ids)
