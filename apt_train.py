@@ -34,8 +34,10 @@ vocab_path = 'tokenizer/sum_0-9_vocab.json'
 tokenizer = APTTokenizer(vocab_path)
 config = APTConfig(vocab_size=len(tokenizer._id_tokens),
                    n_layer=1,
-                   n_head=4,
-                   n_embd=4,
+                   n_head=3,
+                   n_embd=6,
+                   bias=False,
+                   pos_embd='learned',
                    )
 print(f"VOCAB SIZE IS {config.vocab_size}")
 model = APT(config)
@@ -56,7 +58,7 @@ batch_size = 2048 #1024 works?
 num_tokens_per_sample = 10
 data_location = 'datasets/sum_dataset.json'
 train_loader = DataLoaderLite(B=batch_size, T=num_tokens_per_sample, data_location='datasets/sum_dataset.json', tokenizer=tokenizer)
-learning_rate = 12e-3 * 0.5
+learning_rate = 12e-3 * 3.5
 trainset_size = train_loader.trainset_size
 epochs = int(6000 * 3)
 max_steps = epochs * (trainset_size) // batch_size
@@ -113,7 +115,8 @@ for step in tqdm(range(max_steps), dynamic_ncols=True):
     logits, loss = model(x, y)
     writer.add_scalar("Loss/train", loss, step)
     loss.backward() # this adds to gradients! which is why we need to zero_grad
-    norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
+    # norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 2)
+    norm = 1
     optimizer.step() # this actually updates the params
     if step % eval_intervals == 0:
         with torch.no_grad():

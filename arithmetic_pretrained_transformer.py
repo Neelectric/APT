@@ -22,9 +22,9 @@ class CausalSelfAttention(nn.Module):
         super().__init__()
         assert config.n_embd % config.n_head == 0
         # key, query and value projections for all heads, but batched!
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=False)
+        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
         # output projection
-        self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=False)
+        self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
         # regularization
         self.n_head = config.n_head
         self.n_embd = config.n_embd
@@ -55,9 +55,9 @@ class MLP(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=False)
+        self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
         self.gelu = nn.GELU(approximate='tanh') #gpt2 used tanh approximation, dan hendrycks suggested in github comment, nowadays irrelevant
-        self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=False)
+        self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
 
     def forward(self, x):
         x = self.c_fc(x)
@@ -69,9 +69,9 @@ class Block(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.ln_1 = nn.LayerNorm(config.n_embd, bias=False)
+        self.ln_1 = nn.LayerNorm(config.n_embd, bias=config.bias)
         self.attn = CausalSelfAttention(config)
-        self.ln_2 = nn.LayerNorm(config.n_embd, bias=False)
+        self.ln_2 = nn.LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
     def forward(self, x):
@@ -86,20 +86,24 @@ class APTConfig:
     n_layer: int = 1
     n_head: int = 4
     n_embd: int = 4 #512 seems to work well. 256 can also generalize w bsz=< 1024. 128 or 64 works with 256 bsz and lr 8e-4. for 32 we need lr 8e-3. for 8 or 16 we need lr 1e-2. actually for 8, 12e-3 seems ideal. for 4, 20e-3 or even 208e-4 could work
+    bias: bool = True
+    pos_embd: str = 'learned'
 
 class APT(nn.Module):
 
     def __init__(self, config):
         super().__init__()
         self.config = config
+        print("Add different options for learned vs rotational vs alibi positional encodings!!!")
 
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd), # weight token embeddings
+            # if config.pos_embd == 'learned':
             wpe = nn.Embedding(config.block_size, config.n_embd), # weight positional embeddings
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]), # layers
-            ln_f = nn.LayerNorm(config.n_embd, bias=False), # final layernorm, introduced by GPT2 paper
+            ln_f = nn.LayerNorm(config.n_embd, bias=config.bias), # final layernorm, introduced by GPT2 paper
         ))
-        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False) # final classification head
+        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=config.bias) # final classification head
 
     def forward(self, idx, targets=None):
         # idx is of shape (B, T)
