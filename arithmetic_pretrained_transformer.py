@@ -20,6 +20,7 @@ class CausalSelfAttention(nn.Module):
 
     def __init__(self, config):
         super().__init__()
+        print("Modify this to output attentions?")
         assert config.n_embd % config.n_head == 0
         # key, query and value projections for all heads, but batched!
         self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
