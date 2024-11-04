@@ -2,6 +2,7 @@
 # System imports
 import time
 import os
+import pickle
 
 # External imports
 import torch
@@ -29,14 +30,13 @@ print(f"using device {device}")
 
 
 # MODEL SETUP
-
 vocab_path = 'tokenizer/sum_0-9_vocab.json'
 tokenizer = APTTokenizer(vocab_path)
 config = APTConfig(vocab_size=len(tokenizer._id_tokens),
                    n_layer=1,
                    n_head=3,
                    n_embd=6,
-                   bias=False,
+                   bias=True,
                    pos_embd='learned',
                    )
 print(f"VOCAB SIZE IS {config.vocab_size}")
@@ -52,7 +52,6 @@ print(f"Total number of parameters in model: {pytorch_total_params:,}")
 #     print(name, param.shape)
 #     print(param, "\n")
 
-
 # HYPERPARAMETERS AND UTILITIES FOR TRAINING, EVAL DATASET PREP
 batch_size = 2048 #1024 works?
 num_tokens_per_sample = 10
@@ -60,7 +59,7 @@ data_location = 'datasets/sum_dataset.json'
 train_loader = DataLoaderLite(B=batch_size, T=num_tokens_per_sample, data_location='datasets/sum_dataset.json', tokenizer=tokenizer)
 learning_rate = 12e-3 * 3.5
 trainset_size = train_loader.trainset_size
-epochs = int(6000 * 3)
+epochs = int(6000 * 1)
 max_steps = epochs * (trainset_size) // batch_size
 eval_intervals = max_steps // 10
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01) # easy gains: decrease weights for different language tokens!
@@ -99,7 +98,6 @@ def eval_parallel(print_incorrect=False):
         print(f"Out of {len(eval_prompts)} questions, APT got {num_correct} correct.")
     return EM_score
 
-
 # TRAINING BEGINS
 losses_train = []
 losses_eval = []
@@ -115,8 +113,8 @@ for step in tqdm(range(max_steps), dynamic_ncols=True):
     logits, loss = model(x, y)
     writer.add_scalar("Loss/train", loss, step)
     loss.backward() # this adds to gradients! which is why we need to zero_grad
-    # norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 2)
-    norm = 1
+    norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
+    # norm = 1
     optimizer.step() # this actually updates the params
     if step % eval_intervals == 0:
         with torch.no_grad():
@@ -141,3 +139,5 @@ writer.close()
     
 final_em_score_reading = eval_naive(print_incorrect=True) * 100
 print(f"step {step}, train loss: {loss.item():.4f}, eval accuracy (EM): {final_em_score_reading:.2f}%") 
+filename = 'apt_checkpoints/base/finalized_model.sav'
+pickle.dump(model, open(filename, 'wb'))
