@@ -59,7 +59,7 @@ data_location = 'datasets/sum_dataset.json'
 train_loader = DataLoaderLite(B=batch_size, T=num_tokens_per_sample, data_location='datasets/sum_dataset.json', tokenizer=tokenizer)
 learning_rate = 12e-3 * 3.25
 trainset_size = train_loader.trainset_size
-epochs = int(6000 * 0.75)
+epochs = int(6000 * 0.85)
 max_steps = epochs * (trainset_size) // batch_size
 eval_intervals = max_steps // 10
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01) # easy gains: decrease weights for different language tokens!
