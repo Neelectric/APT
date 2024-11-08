@@ -6,7 +6,7 @@ import torch
 import torch.backends
 import torch.nn as nn
 from torch.nn import functional as F
-from apt_tokenizer import APTTokenizer
+from arithmetic_tokenizer import ArithmeticTokenizer
 import random
 
 torch.manual_seed(42)
@@ -75,10 +75,10 @@ class Block(nn.Module):
         self.ln_2 = nn.LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
-    def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
-        x = x + self.mlp(self.ln_2(x))
-        return x
+    def forward(self, hidden_states):
+        hidden_states = hidden_states + self.attn(self.ln_1(hidden_states))
+        hidden_states = hidden_states + self.mlp(self.ln_2(hidden_states))
+        return hidden_states
         
 @dataclass
 class APTConfig:

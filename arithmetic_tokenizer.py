@@ -5,7 +5,7 @@ from typing import Optional, Tuple, Dict, Union
 
 from transformers import PreTrainedTokenizer
 
-class APTTokenizer(PreTrainedTokenizer):
+class ArithmeticTokenizer(PreTrainedTokenizer):
     def __init__(self, vocab: Union[Dict[str, int], str], max_len: int = None):
         if isinstance(vocab, str):
             vocab_path = Path(vocab)

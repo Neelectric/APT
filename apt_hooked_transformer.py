@@ -14,7 +14,7 @@ from transformer_lens import HookedTransformer, HookedTransformerConfig, Factore
 
 # Local imports
 from arithmetic_pretrained_transformer import APT, APTConfig, DataLoaderLite
-from apt_tokenizer import APTTokenizer
+from arithmetic_tokenizer import ArithmeticTokenizer
 
 # Environment prep
 torch.manual_seed(42)
