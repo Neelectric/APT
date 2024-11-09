@@ -1,18 +1,33 @@
+"""Implements a function-complete transformer architecture for addition"""
+# System imports
 import math
 import json
-from tqdm import tqdm
 from dataclasses import dataclass
+import random
+
+# External imports
 import torch
 import torch.backends
 import torch.nn as nn
 from torch.nn import functional as F
-from arithmetic_tokenizer import ArithmeticTokenizer
-import random
 
+# Local imports
+
+# Environment prep
 torch.manual_seed(42)
 torch.cuda.manual_seed(42)
 torch.mps.manual_seed(42)
+torch.set_printoptions(
+    sci_mode=False, 
+    threshold=10_000,
+    edgeitems=3,
+    )
 random.seed(10)
+# attempt to auto recognize the device!
+device = "cpu"
+if torch.cuda.is_available(): device = "cuda"
+elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available(): device = "mps"
+print(f"using device {device}")
 
 # -------------------------------------------- #
 
@@ -89,18 +104,30 @@ class Block(nn.Module):
         # open residual stream and do input layernorm
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)
+        if self.config.print_ln_1:
+            print(f"hidden_states after ln_1: \n{hidden_states}\n")
 
         # self-attn and close residual stream
         attn_output, attn_weights = self.attn(hidden_states)
+        if self.config.print_attn:
+            print(f"attn_output: \n{attn_output}\n")
         hidden_states = residual + attn_output
+        if self.config.print_closed_res_streams:
+            print(f"hidden_states closing res stream: \n{hidden_states}\n")
 
         # reopen residual stream and do second layernorm
         residual = hidden_states
         hidden_states = self.ln_2(hidden_states)
+        if self.config.print_ln_2:
+            print(f"hidden_states after ln_2: \n{hidden_states}\n")
 
         # fully connected and close residual stream
         hidden_states = self.mlp(hidden_states)
+        if self.config.print_mlp:
+            print(f"hidden_states after mlp: \n{hidden_states}\n")
         hidden_states = residual + hidden_states
+        if self.config.print_closed_res_streams:
+            print(f"hidden_states closing res streamv2: \n{hidden_states}\n")
 
         if not self.config.output_attentions:
             attn_weights = None
@@ -116,6 +143,15 @@ class APTConfig:
     bias: bool = True
     pos_embd: str = 'learned'
     output_attentions: bool = False
+
+    print_setup: bool = False
+    print_ln_1: bool = False
+    print_attn: bool = False
+    print_closed_res_streams: bool = False
+    print_ln_2: bool = False
+    print_mlp: bool = False
+    print_final: bool = False
+    
 
 class APT(nn.Module):
 
@@ -146,6 +182,17 @@ class APT(nn.Module):
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (T, n_embd)
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (B, T, n_embd)
         hidden_states = tok_emb + pos_emb
+        
+        if self.config.print_setup:
+            torch.set_printoptions(
+            sci_mode=False, 
+            threshold=10_000,
+            edgeitems=3,
+            linewidth=200,
+            )
+            print(f"positional embeddings: \n{pos_emb}\n")
+            print(f"token embeddings: \n{tok_emb}\n")
+            print(hidden_states)
 
         # forward the blocks of the transformer
         for block in self.transformer.h:
@@ -156,6 +203,9 @@ class APT(nn.Module):
         # forward the final layernorm and the classifier
         hidden_states = self.transformer.ln_f(hidden_states)
         logits = self.lm_head(hidden_states) # (B, T, vocab_size)
+        if self.config.print_final:
+            print(f"hidden_states after ln_f: \n{hidden_states[:,-1,:]}\n")
+            print(f"logits: \n{logits[:,-1,:]}\n")
 
         loss = None
         if targets is not None:

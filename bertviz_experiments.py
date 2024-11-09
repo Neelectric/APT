@@ -18,7 +18,11 @@ from arithmetic_tokenizer import ArithmeticTokenizer
 torch.manual_seed(42)
 torch.cuda.manual_seed(42)
 torch.mps.manual_seed(42)
-torch.set_printoptions(sci_mode=False)
+torch.set_printoptions(
+    sci_mode=False, 
+    threshold=10_000,
+    edgeitems=3,
+    )
 # attempt to auto recognize the device!
 device = "cpu"
 if torch.cuda.is_available(): device = "cuda"
@@ -42,9 +46,29 @@ apt = True
 if apt:
     filename = 'apt_checkpoints/base/finalized_model.sav'
     model = pickle.load(open(filename, 'rb'))
-    model.config.output_attentions = True
     vocab_path = 'tokenizer/sum_0-9_vocab.json'
     tokenizer = ArithmeticTokenizer(vocab_path)
+    config = APTConfig(
+        vocab_size=len(tokenizer._id_tokens),
+        n_layer=1,
+        n_head=3,
+        n_embd=6,
+        bias=True,
+        pos_embd='learned',
+        output_attentions = True,
+
+        print_setup = True,
+        print_ln_1 = True,
+        print_attn = True,
+        print_closed_res_streams = True,
+        print_ln_2 = True,
+        print_mlp = True,
+        print_final = True
+        )
+    model.config = config
+    for layer in model.transformer.h:
+        layer.config = config
+        layer.attn.config.output_attentions = True
 else:
     # model_id = "allenai/OLMo-1B-0724-hf"
     model_id = "meta-llama/Meta-Llama-3-8B-Instruct"
@@ -64,7 +88,7 @@ else:
         cache_dir=cache_dir,
         )
 
-prompt = questions[0]
+prompt = questions[3]
 input_ids = tokenizer.encode(prompt, return_tensors='pt').to(device)  # Tokenize input text
 outputs = model(input_ids)  # Run model
 attention = outputs[-1]  # Retrieve attention from model outputs
