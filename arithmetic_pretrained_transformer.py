@@ -161,7 +161,7 @@ class APT(nn.Module):
         print("Add different options for learned vs rotational vs alibi positional encodings!!!")
 
         self.transformer = nn.ModuleDict(dict(
-            wte = nn.Embedding(config.vocab_size, config.n_embd), # weight token embeddings
+            wte = nn.Embedding(num_embeddings=config.vocab_size, embedding_dim=config.n_embd), # weight token embeddings
             # if config.pos_embd == 'learned':
             wpe = nn.Embedding(config.block_size, config.n_embd), # weight positional embeddings
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]), # layers
