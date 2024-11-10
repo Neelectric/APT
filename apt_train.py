@@ -34,8 +34,8 @@ vocab_path = 'tokenizer/sum_0-9_vocab.json'
 tokenizer = ArithmeticTokenizer(vocab_path)
 config = APTConfig(vocab_size=len(tokenizer._id_tokens),
                    n_layer=1,
-                   n_head=3,
-                   n_embd=6,
+                   n_head=4,
+                   n_embd=4,
                    bias=True,
                    pos_embd='learned',
                    )
@@ -57,11 +57,11 @@ batch_size = 2048 #1024 works?
 num_tokens_per_sample = 10
 data_location = 'datasets/sum_dataset.json'
 train_loader = DataLoaderLite(B=batch_size, T=num_tokens_per_sample, data_location='datasets/sum_dataset.json', tokenizer=tokenizer)
-learning_rate = 12e-3 * 3.25
+learning_rate = 0.042
 trainset_size = train_loader.trainset_size
-epochs = int(6000 * 0.85)
+epochs = int(6000 * 12)
 max_steps = epochs * (trainset_size) // batch_size
-eval_intervals = max_steps // 10
+eval_intervals = max_steps // 20
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01) # easy gains: decrease weights for different language tokens!
 print(f"max_steps: {max_steps}, eval_intervals: {eval_intervals}, learning_rate: {learning_rate}")
 
@@ -139,5 +139,11 @@ writer.close()
     
 final_em_score_reading = eval_naive(print_incorrect=True) * 100
 print(f"step {step}, train loss: {loss.item():.4f}, eval accuracy (EM): {final_em_score_reading:.2f}%") 
-filename = 'apt_checkpoints/base/finalized_model.sav'
-pickle.dump(model, open(filename, 'wb'))
+
+save = False
+if save:
+    filename = 'apt_checkpoints/base/finalized_model.sav'
+    pickle.dump(model, open(filename, 'wb'))
+    print(f"Saved APT file as pickle dump under {filename}")
+else:
+    print("Save is false! We have not saved this model!")

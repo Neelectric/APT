@@ -168,6 +168,9 @@ class APT(nn.Module):
             ln_f = nn.LayerNorm(config.n_embd, bias=config.bias), # final layernorm, introduced by GPT2 paper
         ))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=config.bias) # final classification head
+        for param in self.parameters():
+            if len(param.shape) > 1:
+                nn.init.xavier_normal_(param)
 
     def forward(self, idx, targets=None):
         # idx is of shape (B, T), but sometimes just a single sequence, so we unsqueeze to make it a batch of size 1:
