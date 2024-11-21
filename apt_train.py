@@ -28,14 +28,23 @@ if torch.cuda.is_available(): device = "cuda"
 elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available(): device = "mps"
 print(f"using device {device}")
 
+# TASK DECISION: WITH <BOS> AND <EOS> OR WITHOUT?
+with_bos = False
+if with_bos:
+    vocab_path = 'tokenizer/sum_0-9_vocab.json'
+    num_tokens_per_sample = 10
+    data_location = 'datasets/sum_dataset.json'
+else:
+    vocab_path = 'tokenizer/sum_0-9_vocab_no_bos_no_eos.json'
+    num_tokens_per_sample = 8
+    data_location = 'datasets/sum_dataset_no_bos_no_eos.json'
 
 # MODEL SETUP
-vocab_path = 'tokenizer/sum_0-9_vocab.json'
 tokenizer = ArithmeticTokenizer(vocab_path)
 config = APTConfig(vocab_size=len(tokenizer._id_tokens),
                    n_layer=1,
-                   n_head=4,
-                   n_embd=4,
+                   n_head=3,
+                   n_embd=6,
                    bias=True,
                    pos_embd='learned',
                    )
@@ -45,24 +54,24 @@ model.to(device)
 model.device = device
 model.tokenizer = tokenizer
 
-pytorch_total_params = sum(p.numel() for p in model.parameters())
-print(f"Total number of parameters in model: {pytorch_total_params:,}")
-
-# for name, param in model.named_parameters():
-#     print(name, param.shape)
-#     print(param, "\n")
 
 # HYPERPARAMETERS AND UTILITIES FOR TRAINING, EVAL DATASET PREP
 batch_size = 2048 #1024 works?
-num_tokens_per_sample = 10
-data_location = 'datasets/sum_dataset.json'
-train_loader = DataLoaderLite(B=batch_size, T=num_tokens_per_sample, data_location='datasets/sum_dataset.json', tokenizer=tokenizer)
+train_loader = DataLoaderLite(
+    B=batch_size, 
+    T=num_tokens_per_sample, 
+    data_location=data_location, 
+    tokenizer=tokenizer
+    )
 learning_rate = 0.042
 trainset_size = train_loader.trainset_size
-epochs = int(6000 * 12)
+epochs = int(6000 * 9)
 max_steps = epochs * (trainset_size) // batch_size
 eval_intervals = max_steps // 20
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01) # easy gains: decrease weights for different language tokens!
+
+pytorch_total_params = sum(p.numel() for p in model.parameters())
+print(f"Total number of parameters in model: {pytorch_total_params:,}")
 print(f"max_steps: {max_steps}, eval_intervals: {eval_intervals}, learning_rate: {learning_rate}")
 
 
@@ -75,7 +84,7 @@ for elt in train_loader.eval_raw:
 def eval_naive(print_incorrect=False):
     num_correct = 0
     for prompt, ground_truth in tqdm(zip(eval_prompts, eval_ground_truths), dynamic_ncols=True, disable=True):
-        prediction = model.answer(prompt)[0]
+        prediction = model.answer(prompt, max_length=num_tokens_per_sample)[0]
         if prediction == ground_truth:
             num_correct += 1
         elif print_incorrect:
@@ -87,7 +96,7 @@ def eval_naive(print_incorrect=False):
 
 def eval_parallel(print_incorrect=False):
     num_correct = 0
-    predictions = model.answer(eval_prompts)
+    predictions = model.answer(eval_prompts, max_length=num_tokens_per_sample)
     for prediction, ground_truth in tqdm(zip(predictions, eval_ground_truths), dynamic_ncols=True, disable=True):
         if prediction == ground_truth:
             num_correct += 1
@@ -122,7 +131,7 @@ for step in tqdm(range(max_steps), dynamic_ncols=True):
             # em_score_reading = eval_naive() * 100
             x_eval, y_eval = train_loader.next_batch_eval()
             x_eval, y_eval = x_eval.to(device), y_eval.to(device)
-            logits_eval, loss_eval = model(x, y)
+            logits_eval, loss_eval = model(x_eval, y_eval)
             writer.add_scalar("Loss/eval", loss_eval, step)
             em_score_reading_parallel = eval_parallel() * 100
             # em_score_reading_parallel = eval_naive() * 100

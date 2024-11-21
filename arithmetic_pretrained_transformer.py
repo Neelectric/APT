@@ -275,7 +275,7 @@ class DataLoaderLite:
     
     def next_batch_eval(self):
         B, T = self.B, self.T
-        B = math.floor(2489/T)
+        B = math.floor(250/T)
         buf = self.tokens_eval[self.current_position_eval : self.current_position_eval + B*T + 1]
         x = (buf[:-1]).view(B, T) # inputs
         y = (buf[1:]).view(B, T) # targets
