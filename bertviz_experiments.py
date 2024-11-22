@@ -38,15 +38,22 @@ questions = [
     "<bos> 3 1 + 1 4 =", # 4 5 <eos>
     "<bos> 3 1 + 1 5 =", # 4 6 <eos>
     "<bos> 3 1 + 1 6 =", # 4 7 <eos>
+    "3 1 + 1 6 =",
 ]
 # question = "13+4"
 # prompt = f"Question: What is {question}? Answer: {question}="
 
 apt = True
+with_bos = False
 if apt:
-    filename = 'apt_checkpoints/base/finalized_model.sav'
+    if with_bos:
+        vocab_path = 'tokenizer/sum_0-9_vocab.json'
+        filename = 'apt_checkpoints/base/finalized_model.sav'
+    else:
+        filename = 'apt_checkpoints/base/finalized_model_bos_is_False.sav'
+        vocab_path = 'tokenizer/sum_0-9_vocab_no_bos_no_eos.json'
     model = pickle.load(open(filename, 'rb'))
-    vocab_path = 'tokenizer/sum_0-9_vocab.json'
+    
     tokenizer = ArithmeticTokenizer(vocab_path)
     config = APTConfig(
         vocab_size=len(tokenizer._id_tokens),
@@ -88,7 +95,7 @@ else:
         cache_dir=cache_dir,
         )
 
-prompt = questions[3]
+prompt = questions[4]
 input_ids = tokenizer.encode(prompt, return_tensors='pt').to(device)  # Tokenize input text
 outputs = model(input_ids)  # Run model
 attention = outputs[-1]  # Retrieve attention from model outputs

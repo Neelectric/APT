@@ -65,7 +65,7 @@ train_loader = DataLoaderLite(
     )
 learning_rate = 0.042
 trainset_size = train_loader.trainset_size
-epochs = int(6000 * 9)
+epochs = int(6000 * 1)
 max_steps = epochs * (trainset_size) // batch_size
 eval_intervals = max_steps // 20
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01) # easy gains: decrease weights for different language tokens!
@@ -149,9 +149,9 @@ writer.close()
 final_em_score_reading = eval_naive(print_incorrect=True) * 100
 print(f"step {step}, train loss: {loss.item():.4f}, eval accuracy (EM): {final_em_score_reading:.2f}%") 
 
-save = False
+save = True
 if save:
-    filename = 'apt_checkpoints/base/finalized_model.sav'
+    filename = 'apt_checkpoints/base/finalized_model_bos_is_' + str(with_bos) + '.sav'
     pickle.dump(model, open(filename, 'wb'))
     print(f"Saved APT file as pickle dump under {filename}")
 else:
