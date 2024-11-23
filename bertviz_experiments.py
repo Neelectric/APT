@@ -100,11 +100,11 @@ input_ids = tokenizer.encode(prompt, return_tensors='pt').to(device)  # Tokenize
 outputs = model(input_ids)  # Run model
 attention = outputs[-1]  # Retrieve attention from model outputs
 # we copy attention and append it to 
-print(len(attention))
-print(attention[-1].shape)
-tokens = tokenizer.convert_ids_to_tokens(input_ids[0])  # Convert input ids to token strings
-model_view(
-    attention, 
-    tokens, 
-    # include_layers=list(range(28,32))
-    )  # Display model view
+# print(len(attention))
+# print(attention[-1].shape)
+# tokens = tokenizer.convert_ids_to_tokens(input_ids[0])  # Convert input ids to token strings
+# model_view(
+#     attention, 
+#     tokens, 
+#     # include_layers=list(range(28,32))
+#     )  # Display model view

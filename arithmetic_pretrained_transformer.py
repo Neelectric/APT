@@ -4,6 +4,7 @@ import math
 import json
 from dataclasses import dataclass
 import random
+import weakref
 
 # External imports
 import torch
@@ -92,9 +93,10 @@ class MLP(nn.Module):
 
 class Block(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, config, apt):
         super().__init__()
         self.config = config
+        self.apt = weakref.ref(apt)
         self.ln_1 = nn.LayerNorm(config.n_embd, bias=config.bias)
         self.attn = CausalSelfAttention(config)
         self.ln_2 = nn.LayerNorm(config.n_embd, bias=config.bias)
@@ -105,29 +107,29 @@ class Block(nn.Module):
         residual = hidden_states
         hidden_states = self.ln_1(hidden_states)
         if self.config.print_ln_1:
-            print(f"hidden_states after ln_1: \n{hidden_states}\n")
+            print(f"hidden_states after ln_1: \n{self.apt.apt_print(hidden_states)}\n")
 
         # self-attn and close residual stream
         attn_output, attn_weights = self.attn(hidden_states)
         if self.config.print_attn:
-            print(f"attn_output: \n{attn_output}\n")
+            print(f"attn_output: \n{self.apt.apt_print(attn_output)}\n")
         hidden_states = residual + attn_output
         if self.config.print_closed_res_streams:
-            print(f"hidden_states closing res stream: \n{hidden_states}\n")
+            print(f"hidden_states closing res stream: \n{self.apt.apt_print(hidden_states)}\n")
 
         # reopen residual stream and do second layernorm
         residual = hidden_states
         hidden_states = self.ln_2(hidden_states)
         if self.config.print_ln_2:
-            print(f"hidden_states after ln_2: \n{hidden_states}\n")
+            print(f"hidden_states after ln_2: \n{self.apt.apt_print(hidden_states)}\n")
 
         # fully connected and close residual stream
         hidden_states = self.mlp(hidden_states)
         if self.config.print_mlp:
-            print(f"hidden_states after mlp: \n{hidden_states}\n")
+            print(f"hidden_states after mlp: \n{self.apt.apt_print(hidden_states)}\n")
         hidden_states = residual + hidden_states
         if self.config.print_closed_res_streams:
-            print(f"hidden_states closing res streamv2: \n{hidden_states}\n")
+            print(f"hidden_states closing res streamv2: \n{self.apt.apt_print(hidden_states)}\n")
 
         if not self.config.output_attentions:
             attn_weights = None
@@ -164,38 +166,42 @@ class APT(nn.Module):
             wte = nn.Embedding(num_embeddings=config.vocab_size, embedding_dim=config.n_embd), # weight token embeddings
             # if config.pos_embd == 'learned':
             wpe = nn.Embedding(config.block_size, config.n_embd), # weight positional embeddings
-            h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]), # layers
+            h = nn.ModuleList([Block(config, self) for _ in range(config.n_layer)]), # layers
             ln_f = nn.LayerNorm(config.n_embd, bias=config.bias), # final layernorm, introduced by GPT2 paper
         ))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=config.bias) # final classification head
+        self.tokenizer = None # keeping this empty for now but in apt_print we need it for tokenizing and detokenizing
+        self.current_input_ids = None # same as above!
         for param in self.parameters():
             if len(param.shape) > 1:
                 nn.init.xavier_normal_(param)
 
-    def forward(self, idx, targets=None):
-        # idx is of shape (B, T), but sometimes just a single sequence, so we unsqueeze to make it a batch of size 1:
-        if idx.dim() == 1:
-            idx = idx.unsqueeze(0)
-        B, T = idx.size()
+    def forward(self, input_ids, targets=None):
+        self.current_input_ids = input_ids
+        # input_ids is of shape (B, T), but sometimes just a single sequence, in which case we unsqueeze to make it a batch of size 1:
+        if input_ids.dim() == 1:
+            input_ids = input_ids.unsqueeze(0)
+        B, T = input_ids.size()
         assert T <= self.config.block_size, f"Cannot forward sequence of length {T}, block size is only {self.config.block_size}"
         all_self_attns = () if self.config.output_attentions else None
 
         # forward the token and posisition embeddings
-        pos = torch.arange(0, T, dtype=torch.long, device=idx.device) # shape (T)
+        pos = torch.arange(0, T, dtype=torch.long, device=input_ids.device) # shape (T)
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (T, n_embd)
-        tok_emb = self.transformer.wte(idx) # token embeddings of shape (B, T, n_embd)
+        tok_emb = self.transformer.wte(input_ids) # token embeddings of shape (B, T, n_embd)
         hidden_states = tok_emb + pos_emb
         
         if self.config.print_setup:
             torch.set_printoptions(
-            sci_mode=False, 
-            threshold=10_000,
-            edgeitems=3,
-            linewidth=200,
+                precision=3,
+                sci_mode=False, 
+                threshold=10_000,
+                edgeitems=3,
+                linewidth=200,
             )
-            print(f"positional embeddings: \n{pos_emb}\n")
-            print(f"token embeddings: \n{tok_emb}\n")
-            print(hidden_states)
+            print(f"positional embeddings: \n{self.apt_print(pos_emb)}\n")
+            print(f"token embeddings: \n{self.apt_print(tok_emb)}\n")
+            print(f"pos+tok: \n{self.apt_print(hidden_states)}\n")
 
         # forward the blocks of the transformer
         for block in self.transformer.h:
@@ -237,6 +243,19 @@ class APT(nn.Module):
         output_ids = self.generate(input_ids, max_length=max_length)
         decoded = self.tokenizer.batch_decode(output_ids)
         return decoded
+    
+    def apt_print(self, hidden_state):
+        current_sequence = []
+        for token in self.current_input_ids[0]:
+            current_sequence.append(self.tokenizer.decode(token))
+        output_string = ''
+        for token, vector in zip(current_sequence, hidden_state.squeeze()):
+            output_string += f"'{token}' - {vector.detach()}\n"
+        return output_string
+    
+    def convert_weakrefs_to_strongrefs(self):
+        for layer in self.transformer['h']:
+            layer.apt = self
 
 class DataLoaderLite:
     def __init__(self, B, T, data_location, tokenizer):

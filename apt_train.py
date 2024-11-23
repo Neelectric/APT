@@ -152,6 +152,8 @@ print(f"step {step}, train loss: {loss.item():.4f}, eval accuracy (EM): {final_e
 save = True
 if save:
     filename = 'apt_checkpoints/base/finalized_model_bos_is_' + str(with_bos) + '.sav'
+    # before pickle dump we need to undo the weakref lol
+    model.convert_weakrefs_to_strongrefs()
     pickle.dump(model, open(filename, 'wb'))
     print(f"Saved APT file as pickle dump under {filename}")
 else:
