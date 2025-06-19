@@ -225,8 +225,9 @@ class APT(nn.Module):
         return logits, loss
 
     def generate(self, input_ids, max_length=10):
+        eos_token_id = self.tokenizer.eos_token_id
         while True:
-            if (input_ids.shape[1] >= max_length) or (input_ids[0][-1] == 13):
+            if (input_ids.shape[1] >= max_length) or (input_ids[0][-1] == eos_token_id):
                 input_ids = input_ids.tolist()
                 return input_ids
             logits, loss = self(input_ids)
@@ -237,12 +238,15 @@ class APT(nn.Module):
             xcol = torch.gather(topk_indices, -1, ix)
             input_ids = torch.cat((input_ids, xcol), dim=1)
     
-    def answer(self, prompt, max_length=10):
-        tokens = self.tokenizer(prompt, return_tensors="pt")["input_ids"]
+    def answer(self, prompt, max_length_eval_prompt, max_length=10):
+        # tokens = self.tokenizer(prompt, return_tensors="pt")["input_ids"]
+        tokens = self.tokenizer(prompt, return_tensors="pt", padding='max_length', max_length=max_length_eval_prompt, padding_side="left")["input_ids"]
         input_ids = tokens.to(self.device)
-        output_ids = self.generate(input_ids, max_length=max_length)
-        decoded = self.tokenizer.batch_decode(output_ids)
-        return decoded
+        output_ids = self.generate(input_ids, max_length=max_length)[0]
+        output_ids_no_eos = output_ids[0:-1]
+        decoded = self.tokenizer.batch_decode(output_ids_no_eos, skip_special_tokens=True)
+        output = "".join(decoded)
+        return output
     
     def apt_print(self, hidden_state):
         current_sequence = []
@@ -258,49 +262,93 @@ class APT(nn.Module):
             layer.apt = self
 
 class DataLoaderLite:
-    def __init__(self, B, T, data_location, tokenizer):
+    def __init__(self, B, T, data_location, tokenizer, shuffle=True, eval_percentage=0.1):
         self.B = B
         self.T = T
+        self.max_length = tokenizer.max_length
         # vocab_path = 'tokenizer/vocab.json'
         # tokenizer = APTTokenizer(vocab_path)
         with open(data_location, 'r') as f:
             text = json.load(f)
-
-        random.shuffle(text)
-        num_eval = int(0.1 * len(text))
+        if shuffle:
+            random.shuffle(text)
+        num_eval = int(eval_percentage * len(text))
         eval_raw, train_raw = text[0:num_eval], text[num_eval+1:]
         self.trainset_size = len(train_raw)
-        train = " ".join(train_raw)
-        eval = " ".join(eval_raw)
-        self.tokens_train = tokenizer(train, return_tensors="pt")["input_ids"][0]
+        print(f"we have self.trainset_size {self.trainset_size}")
+        # train = " ".join(train_raw)
+        # eval = " ".join(eval_raw)
+        self.tokens_train = tokenizer(train_raw, return_tensors="pt", padding='max_length', max_length=self.max_length, padding_side="left")["input_ids"]
         self.eval_raw = eval_raw
-        self.tokens_eval = tokenizer(eval, return_tensors="pt")["input_ids"][0]
-        print(f"loaded {len(self.tokens_train)} tokens")
+        self.tokens_eval = tokenizer(eval_raw, return_tensors="pt", padding='max_length', max_length=self.max_length, padding_side="left")["input_ids"]
+        print(f"loaded {self.tokens_train.shape[0] * self.tokens_train.shape[1]} tokens")
         print(f"1 epoch = {len(self.tokens_train) // (B * T)} batches")
         self.current_position_train = 0
         self.current_position_eval = 0
 
     def next_batch_train(self):
         B, T = self.B, self.T
-        buf = self.tokens_train[self.current_position_train : self.current_position_train + B*T + 1]
-        x = (buf[:-1]).view(B, T) # inputs
-        y = (buf[1:]).view(B, T) # targets
-        # advance the current position in tensor
-        self.current_position_train += B * T
+        batch = self.tokens_train[self.current_position_train : self.current_position_train + B]
+        self.current_position_train += B
+        x = batch
+        y = torch.cat([
+            batch[:, 1:], # we remove first token of each prompt
+            torch.full((B, 1), 16, dtype=batch.dtype, device=batch.device)
+        ], dim=1)
         # if loading next batch would be out of bounds, reset
-        if self.current_position_train + (B * T + 1) > len(self.tokens_train):
+        if self.current_position_train + (B + 1) > len(self.tokens_train):
             self.current_position_train = 0
         return x,y
     
     def next_batch_eval(self):
         B, T = self.B, self.T
-        B = math.floor(250/T)
-        buf = self.tokens_eval[self.current_position_eval : self.current_position_eval + B*T + 1]
-        x = (buf[:-1]).view(B, T) # inputs
-        y = (buf[1:]).view(B, T) # targets
-        # advance the current position in tensor
-        self.current_position_eval += B * T
+        batch = self.tokens_eval[self.current_position_eval : self.current_position_eval + B]
+        self.current_position_eval += B
+        x = batch
+        y = torch.cat([
+            batch[:, 1:], # we remove first token of each prompt
+            torch.full((B, 1), 16, dtype=batch.dtype, device=batch.device)
+        ], dim=1)
         # if loading next batch would be out of bounds, reset
-        if self.current_position_eval + (B * T + 1) > len(self.tokens_eval):
+        if self.current_position_eval + (B + 1) > len(self.tokens_eval):
             self.current_position_eval = 0
         return x,y
+    
+    # def next_batch_eval(self):
+    #     B, T = self.B, self.T
+    #     B = math.floor(250/T)
+    #     buf = self.tokens_eval[self.current_position_eval : self.current_position_eval + B*T + 1]
+    #     x = (buf[:-1]).view(B, T) # inputs
+    #     y = (buf[1:]).view(B, T) # targets
+    #     # advance the current position in tensor
+    #     self.current_position_eval += B * T
+    #     # if loading next batch would be out of bounds, reset
+    #     if self.current_position_eval + (B * T + 1) > len(self.tokens_eval):
+    #         self.current_position_eval = 0
+    #     return x,y
+    
+
+
+
+### Lets test!
+# from arithmetic_tokenizer import ArithmeticTokenizer
+# with_bos = False
+# vocab_path = 'tokenizer/sum_0-9+special_vocab.json'
+# num_tokens_per_sample = 11
+# data_location = 'datasets/no_bos_no_eos/499by499.json'
+
+# # MODEL SETUP
+# tokenizer = ArithmeticTokenizer(vocab_path, max_length=num_tokens_per_sample, padding="max_length")
+
+# # HYPERPARAMETERS AND UTILITIES FOR TRAINING, EVAL DATASET PREP
+# batch_size = 2 #1024 works?
+# train_loader = DataLoaderLite(
+#     B=batch_size, 
+#     T=num_tokens_per_sample, 
+#     data_location=data_location, 
+#     tokenizer=tokenizer
+#     )
+
+# x, y = train_loader.next_batch_train()
+# print(x)
+# print(y)

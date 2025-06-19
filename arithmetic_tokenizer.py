@@ -6,7 +6,7 @@ from typing import Optional, Tuple, Dict, Union
 from transformers import PreTrainedTokenizer
 
 class ArithmeticTokenizer(PreTrainedTokenizer):
-    def __init__(self, vocab: Union[Dict[str, int], str], max_len: int = None):
+    def __init__(self, vocab: Union[Dict[str, int], str], max_length: int = None, padding=False):
         if isinstance(vocab, str):
             vocab_path = Path(vocab)
             with open(vocab_path, 'r') as f:
@@ -15,7 +15,8 @@ class ArithmeticTokenizer(PreTrainedTokenizer):
             self._token_ids = vocab
         id_to_token = {value: key for key, value in self._token_ids.items()}
         self._id_tokens = id_to_token
-        super().__init__(max_len=max_len)
+        super().__init__(max_len=max_length)
+        self.max_length = max_length
         if "<unk>" in id_to_token.values():
             self.unk_token = '<unk>'
             self.unk_token_id = self._token_ids.get(self.unk_token, 0)
@@ -31,9 +32,13 @@ class ArithmeticTokenizer(PreTrainedTokenizer):
         if "<mask>" in id_to_token.values():
             self.mask_token = '<mask>'
             self.mask_token_id = self._token_ids.get(self.mask_token, 4)
+        
+        # self.padding=padding
+        self.padding_side="left"
 
     def _tokenize(self, text: str, **kwargs):
-        return text.split(' ')
+        # return text.split('')
+        return list(text)
 
     def _convert_token_to_id(self, token: str) -> int:
         return self._token_ids[token] if token in self._token_ids else self.unk_token_id
