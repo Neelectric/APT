@@ -37,9 +37,9 @@ data_location = 'datasets/no_bos_no_eos/499by499.json'
 tokenizer = ArithmeticTokenizer(vocab_path, max_length=num_tokens_per_sample, padding="max_length")
 config = APTConfig(vocab_size=len(tokenizer._id_tokens),
                    block_size=num_tokens_per_sample,
-                   n_layer=1,
-                   n_head=3,
-                   n_embd=6,
+                   n_layer=3,
+                   n_head=4,
+                   n_embd=8,
                    bias=True,
                    pos_embd='learned',
                    )
@@ -59,14 +59,14 @@ train_loader = DataLoaderLite(
     tokenizer=tokenizer,
     eval_percentage=0.01
     )
-learning_rate = 0.042
+learning_rate = 0.04
 trainset_size = train_loader.trainset_size
-epochs = int(150 * 1)
+epochs = int(125 * 1)
 max_steps = epochs * (trainset_size) // batch_size
-eval_intervals = max_steps // 6
-optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01) # easy gains: decrease weights for different language tokens!
+eval_intervals = max_steps // 10
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.02) # easy gains: decrease weights for different language tokens!
 
-pytorch_total_params = sum(p.numel() for p in model.parameters())
+pytorch_total_params = sum(p.numel() for p in model.parameters(recurse=True))
 print(f"Total number of parameters in model: {pytorch_total_params:,}")
 print(f"max_steps: {max_steps}, eval_intervals: {eval_intervals}, learning_rate: {learning_rate}")
 
@@ -121,7 +121,7 @@ for step in tqdm(range(max_steps), dynamic_ncols=True):
     norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
     # norm = 1
     optimizer.step() # this actually updates the params
-    if step % eval_intervals == 0:
+    if (step !=0) & (step % eval_intervals == 0):
     # if False:
         with torch.no_grad():
             model.eval()
