@@ -5,6 +5,7 @@ import json
 from dataclasses import dataclass
 import random
 import weakref
+import pickle
 
 # External imports
 import torch
@@ -53,6 +54,7 @@ class CausalSelfAttention(nn.Module):
         # calculate q, k and v for all heads in batch and move head forward to be the batch
         # nh is num_heads, hs is head_size, C (number of channels) is nh * ns
         # so for GPT-2 (124M), n_head=12, hs=64, nh*hs=C=768 channels in transformer
+        # pickle.dump(x, open("random_pickles/x.sav", 'wb'))
         qkv = self.c_attn(x)
         queries, keys, values = qkv.split(self.n_embd, dim=2)
         queries = queries.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
@@ -275,7 +277,7 @@ class DataLoaderLite:
         num_eval = int(eval_percentage * len(text))
         eval_raw, train_raw = text[0:num_eval], text[num_eval+1:]
         self.trainset_size = len(train_raw)
-        print(f"we have self.trainset_size {self.trainset_size}")
+        print(f"we have self.trainset_size {self.trainset_size}, and num_eval {num_eval}")
         # train = " ".join(train_raw)
         # eval = " ".join(eval_raw)
         self.tokens_train = tokenizer(train_raw, return_tensors="pt", padding='max_length', max_length=self.max_length, padding_side="left")["input_ids"]

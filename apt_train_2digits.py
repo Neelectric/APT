@@ -9,8 +9,8 @@ import torch
 from tqdm import tqdm
 
 # Local imports
-from arithmetic_pretrained_transformer import APT, APTConfig, DataLoaderLite
-from arithmetic_tokenizer import ArithmeticTokenizer
+from src.arithmetic_pretrained_transformer import APT, APTConfig, DataLoaderLite
+from src.arithmetic_tokenizer import ArithmeticTokenizer
 
 # Environment prep
 torch.manual_seed(42)
@@ -31,11 +31,11 @@ print(f"using device {device}")
 # TASK DECISION: WITH <BOS> AND <EOS> OR WITHOUT?
 with_bos = False
 if with_bos:
-    vocab_path = 'tokenizer/sum_0-9_vocab.json'
+    vocab_path = 'tokenizer_variations/sum_0-9_vocab.json'
     num_tokens_per_sample = 10
     data_location = 'datasets/sum_dataset.json'
 else:
-    vocab_path = 'tokenizer/sum_0-9_vocab_no_bos_no_eos.json'
+    vocab_path = 'tokenizer_variations/sum_0-9_vocab_no_bos_no_eos.json'
     num_tokens_per_sample = 8
     data_location = 'datasets/sum_dataset_no_bos_no_eos.json'
 

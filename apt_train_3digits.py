@@ -9,8 +9,8 @@ import torch
 from tqdm import tqdm
 
 # Local imports
-from arithmetic_pretrained_transformer import APT, APTConfig, DataLoaderLite
-from arithmetic_tokenizer import ArithmeticTokenizer
+from src.arithmetic_pretrained_transformer import APT, APTConfig, DataLoaderLite
+from src.arithmetic_tokenizer import ArithmeticTokenizer
 
 # Environment prep
 torch.manual_seed(42)
@@ -29,7 +29,7 @@ elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available(): devic
 print(f"using device {device}")
 
 with_bos = False
-vocab_path = 'tokenizer/sum_0-9+special_vocab.json'
+vocab_path = 'tokenizer_variations/sum_0-9+special_vocab.json'
 num_tokens_per_sample = 11
 data_location = 'datasets/no_bos_no_eos/499by499.json'
 
@@ -37,9 +37,9 @@ data_location = 'datasets/no_bos_no_eos/499by499.json'
 tokenizer = ArithmeticTokenizer(vocab_path, max_length=num_tokens_per_sample, padding="max_length")
 config = APTConfig(vocab_size=len(tokenizer._id_tokens),
                    block_size=num_tokens_per_sample,
-                   n_layer=3,
-                   n_head=4,
-                   n_embd=8,
+                   n_layer=10,
+                   n_head=3,
+                   n_embd=3,
                    bias=True,
                    pos_embd='learned',
                    )
@@ -51,7 +51,7 @@ model.tokenizer = tokenizer
 
 
 # HYPERPARAMETERS AND UTILITIES FOR TRAINING, EVAL DATASET PREP
-batch_size = 2048 #1024 works?
+batch_size = 4096 #16384 #8192 #4096 #2048 #1024 works?
 train_loader = DataLoaderLite(
     B=batch_size, 
     T=num_tokens_per_sample, 
@@ -59,6 +59,7 @@ train_loader = DataLoaderLite(
     tokenizer=tokenizer,
     eval_percentage=0.01
     )
+
 learning_rate = 0.04
 trainset_size = train_loader.trainset_size
 epochs = int(125 * 1)
@@ -130,13 +131,13 @@ for step in tqdm(range(max_steps), dynamic_ncols=True):
             # em_score_reading = eval_naive() * 100
             print("overwritting em score parallel")
             em_score_reading_parallel = 99999
-            x_eval, y_eval = train_loader.next_batch_eval()
-            x_eval, y_eval = x_eval.to(device), y_eval.to(device)
-            logits_eval, loss_eval = model(x_eval, y_eval)
-            writer.add_scalar("Loss/eval", loss_eval, step)
+            # x_eval, y_eval = train_loader.next_batch_eval()
+            # x_eval, y_eval = x_eval.to(device), y_eval.to(device)
+            # logits_eval, loss_eval = model(x_eval, y_eval)
+            writer.add_scalar("Loss/eval", loss, step)
             # em_score_reading_parallel = eval_parallel() * 100
             em_score_reading_parallel = eval_naive() * 100
-            tqdm.write(f"step {step} | loss_train: {loss.item():.4f} | loss_eval: {loss_eval.item():.4f} | norm: {norm:.3f}| EM (parallel): {em_score_reading_parallel:.2f}%") #we use .item() because this is a tensor with a single element that lives on .device. .item() sends it to cpu
+            tqdm.write(f"step {step} | loss_train: {loss.item():.4f} | loss_eval: {loss.item():.4f} | norm: {norm:.3f}| EM (parallel): {em_score_reading_parallel:.2f}%") #we use .item() because this is a tensor with a single element that lives on .device. .item() sends it to cpu
             # accuracies.append(em_score_reading_parallel)
             # accuracy_steps.append(step)
             # losses_train.append(loss.item())
