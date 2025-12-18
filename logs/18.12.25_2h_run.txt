@@ -1,0 +1,57 @@
+(.apt_venv) (base) user@a652ad608ef7:~/repos/APT$ python apt_train_3digits.py     
+using device cuda        
+using device cuda            
+VOCAB SIZE IS 17             
+Add different options for learned vs rotational vs alibi positional encodings!!!  
+we have self.trainset_size 247499, and num_eval 2500               
+loaded 2722489 tokens        
+1 epoch = 2 batches          
+Total number of parameters in model: 746      
+max_steps: 90636, eval_intervals: 1812, learning_rate: 0.04  
+step 1812 | loss_train: 1.5944 | loss_eval: 1.5944 | norm: 0.054| EM (parallel): 0.36%  
+step 5436 | loss_train: 1.5614 | loss_eval: 1.5614 | norm: 0.055| EM (parallel): 0.28%  
+step 7248 | loss_train: 1.5219 | loss_eval: 1.5219 | norm: 1.168| EM (parallel): 0.40%  
+step 10872 | loss_train: 1.5163 | loss_eval: 1.5163 | norm: 1.020| EM (parallel): 0.48% 
+step 12684 | loss_train: 1.5095 | loss_eval: 1.5095 | norm: 0.624| EM (parallel): 0.12% 
+step 14496 | loss_train: 1.5879 | loss_eval: 1.5879 | norm: 0.110| EM (parallel): 0.48% 
+step 16308 | loss_train: 1.5785 | loss_eval: 1.5785 | norm: 0.256| EM (parallel): 0.44%  
+step 19932 | loss_train: 1.5758 | loss_eval: 1.5758 | norm: 0.452| EM (parallel): 0.56% 
+step 21744 | loss_train: 1.6261 | loss_eval: 1.6261 | norm: 0.469| EM (parallel): 0.40%             
+step 23556 | loss_train: 1.5637 | loss_eval: 1.5637 | norm: 0.132| EM (parallel): 0.28% 
+step 25368 | loss_train: 1.5331 | loss_eval: 1.5331 | norm: 0.391| EM (parallel): 0.64% 
+step 27180 | loss_train: 1.5509 | loss_eval: 1.5509 | norm: 2.866| EM (parallel): 0.44% 
+step 28992 | loss_train: 1.5154 | loss_eval: 1.5154 | norm: 0.317| EM (parallel): 0.32%   
+step 30804 | loss_train: 1.5724 | loss_eval: 1.5724 | norm: 0.580| EM (parallel): 0.20% 
+step 32616 | loss_train: 1.5539 | loss_eval: 1.5539 | norm: 0.591| EM (parallel): 0.16% 
+step 34428 | loss_train: 1.5526 | loss_eval: 1.5526 | norm: 0.245| EM (parallel): 0.24%
+step 36240 | loss_train: 1.5468 | loss_eval: 1.5468 | norm: 0.660| EM (parallel): 0.36%
+step 38052 | loss_train: 1.5643 | loss_eval: 1.5643 | norm: 2.163| EM (parallel): 0.32% 
+step 39864 | loss_train: 1.5249 | loss_eval: 1.5249 | norm: 2.002| EM (parallel): 0.72% 
+step 41676 | loss_train: 1.5398 | loss_eval: 1.5398 | norm: 3.730| EM (parallel): 0.20%   
+step 43488 | loss_train: 1.5057 | loss_eval: 1.5057 | norm: 0.579| EM (parallel): 0.20% 
+step 45300 | loss_train: 1.5136 | loss_eval: 1.5136 | norm: 1.533| EM (parallel): 0.40% 
+step 47112 | loss_train: 1.5087 | loss_eval: 1.5087 | norm: 1.579| EM (parallel): 0.44%
+step 48924 | loss_train: 1.4827 | loss_eval: 1.4827 | norm: 1.081| EM (parallel): 0.88%
+step 50736 | loss_train: 1.6010 | loss_eval: 1.6010 | norm: 1.428| EM (parallel): 0.28% 
+step 52548 | loss_train: 1.5707 | loss_eval: 1.5707 | norm: 0.320| EM (parallel): 0.00% 
+step 54360 | loss_train: 1.5603 | loss_eval: 1.5603 | norm: 0.195| EM (parallel): 0.40%   
+step 56172 | loss_train: 1.5269 | loss_eval: 1.5269 | norm: 1.998| EM (parallel): 0.48%  
+step 57984 | loss_train: 1.6115 | loss_eval: 1.6115 | norm: 0.525| EM (parallel): 0.24% 
+step 59796 | loss_train: 1.5145 | loss_eval: 1.5145 | norm: 1.911| EM (parallel): 0.48%
+step 61608 | loss_train: 1.5077 | loss_eval: 1.5077 | norm: 3.716| EM (parallel): 0.64%
+step 63420 | loss_train: 1.5377 | loss_eval: 1.5377 | norm: 1.099| EM (parallel): 0.64% 
+step 65232 | loss_train: 1.5370 | loss_eval: 1.5370 | norm: 0.498| EM (parallel): 0.32% 
+step 67044 | loss_train: 1.5472 | loss_eval: 1.5472 | norm: 3.020| EM (parallel): 0.40%   
+step 68856 | loss_train: 1.5447 | loss_eval: 1.5447 | norm: 1.492| EM (parallel): 0.48% 
+step 70668 | loss_train: 1.5269 | loss_eval: 1.5269 | norm: 1.608| EM (parallel): 0.36% 
+step 72480 | loss_train: 1.5341 | loss_eval: 1.5341 | norm: 2.643| EM (parallel): 0.28%
+step 74292 | loss_train: 1.5334 | loss_eval: 1.5334 | norm: 4.146| EM (parallel): 0.32%
+step 76104 | loss_train: 1.5300 | loss_eval: 1.5300 | norm: 2.087| EM (parallel): 0.44% 
+step 77916 | loss_train: 1.5179 | loss_eval: 1.5179 | norm: 9.067| EM (parallel): 0.72% 
+step 79728 | loss_train: 1.5753 | loss_eval: 1.5753 | norm: 2.940| EM (parallel): 0.72%   
+step 81540 | loss_train: 1.5748 | loss_eval: 1.5748 | norm: 4.144| EM (parallel): 0.60% 
+step 83352 | loss_train: 1.5273 | loss_eval: 1.5273 | norm: 11.900| EM (parallel): 0.80%
+step 85164 | loss_train: 1.5224 | loss_eval: 1.5224 | norm: 12.968| EM (parallel): 0.68%               
+step 86976 | loss_train: 1.5179 | loss_eval: 1.5179 | norm: 10.512| EM (parallel): 0.52%               
+step 88788 | loss_train: 1.5124 | loss_eval: 1.5124 | norm: 6.349| EM (parallel): 0.64% 
+step 90600 | loss_train: 1.5151 | loss_eval: 1.5151 | norm: 6.846| EM (parallel): 0.60%

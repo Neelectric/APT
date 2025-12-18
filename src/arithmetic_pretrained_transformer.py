@@ -83,9 +83,9 @@ class MLP(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
+        self.c_fc = nn.Linear(config.n_embd, config.mlp_expansion_factor * config.n_embd, bias=config.bias) # by default up-projection by 4x expansion factor
         self.gelu = nn.GELU(approximate='tanh') #gpt2 used tanh approximation, dan hendrycks suggested in github comment, nowadays irrelevant
-        self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
+        self.c_proj = nn.Linear(config.mlp_expansion_factor * config.n_embd, config.n_embd, bias=config.bias) # by default down-projection from 4x expansion factor
 
     def forward(self, x):
         x = self.c_fc(x)
@@ -100,6 +100,7 @@ class Block(nn.Module):
         self.config = config
         self.apt = weakref.ref(apt)
         self.ln_1 = nn.LayerNorm(config.n_embd, bias=config.bias)
+        # self.ln_1 = nn.RMS
         self.attn = CausalSelfAttention(config)
         self.ln_2 = nn.LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
@@ -144,6 +145,7 @@ class APTConfig:
     n_layer: int = 1
     n_head: int = 4
     n_embd: int = 4 #512 seems to work well. 256 can also generalize w bsz=< 1024. 128 or 64 works with 256 bsz and lr 8e-4. for 32 we need lr 8e-3. for 8 or 16 we need lr 1e-2. actually for 8, 12e-3 seems ideal. for 4, 20e-3 or even 208e-4 could work
+    mlp_expansion_factor: int = 4,
     bias: bool = True
     pos_embd: str = 'learned'
     output_attentions: bool = False
@@ -163,6 +165,7 @@ class APT(nn.Module):
         super().__init__()
         self.config = config
         print("Add different options for learned vs rotational vs alibi positional encodings!!!")
+        print("Swap layernorm to RMSNorm!")
 
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(num_embeddings=config.vocab_size, embedding_dim=config.n_embd), # weight token embeddings
@@ -287,19 +290,23 @@ class DataLoaderLite:
         print(f"1 epoch = {len(self.tokens_train) // (B * T)} batches")
         self.current_position_train = 0
         self.current_position_eval = 0
+        self.pad_token_id = tokenizer.pad_token_id
+        self.eos_token_id = tokenizer.eos_token_id
 
     def next_batch_train(self):
         B, T = self.B, self.T
         batch = self.tokens_train[self.current_position_train : self.current_position_train + B]
         self.current_position_train += B
         x = batch
+        eos_tok = self.eos_token_id
         y = torch.cat([
             batch[:, 1:], # we remove first token of each prompt
-            torch.full((B, 1), 16, dtype=batch.dtype, device=batch.device)
+            torch.full((B, 1), eos_tok, dtype=batch.dtype, device=batch.device)
         ], dim=1)
         # if loading next batch would be out of bounds, reset
         if self.current_position_train + (B + 1) > len(self.tokens_train):
             self.current_position_train = 0
+        y[x == self.pad_token_id] = -100 # pytorch cross_entropy convention is to ignore all instances with label -100, we use this for pad tokens so they don't muddle gradients
         return x,y
     
     def next_batch_eval(self):
@@ -307,9 +314,10 @@ class DataLoaderLite:
         batch = self.tokens_eval[self.current_position_eval : self.current_position_eval + B]
         self.current_position_eval += B
         x = batch
+        eos_tok = self.eos_token_id
         y = torch.cat([
             batch[:, 1:], # we remove first token of each prompt
-            torch.full((B, 1), 16, dtype=batch.dtype, device=batch.device)
+            torch.full((B, 1), eos_tok, dtype=batch.dtype, device=batch.device)
         ], dim=1)
         # if loading next batch would be out of bounds, reset
         if self.current_position_eval + (B + 1) > len(self.tokens_eval):

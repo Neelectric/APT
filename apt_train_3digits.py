@@ -11,6 +11,7 @@ from tqdm import tqdm
 # Local imports
 from src.arithmetic_pretrained_transformer import APT, APTConfig, DataLoaderLite
 from src.arithmetic_tokenizer import ArithmeticTokenizer
+from src.async_realtime_plots import plot_async
 
 # Environment prep
 torch.manual_seed(42)
@@ -37,9 +38,10 @@ data_location = 'datasets/no_bos_no_eos/499by499.json'
 tokenizer = ArithmeticTokenizer(vocab_path, max_length=num_tokens_per_sample, padding="max_length")
 config = APTConfig(vocab_size=len(tokenizer._id_tokens),
                    block_size=num_tokens_per_sample,
-                   n_layer=12,
-                   n_head=3,
-                   n_embd=3,
+                   n_layer=7,
+                   n_head=2,
+                   n_embd=6,
+                   mlp_expansion_factor=16,
                    bias=True,
                    pos_embd='learned',
                    )
@@ -51,7 +53,7 @@ model.tokenizer = tokenizer
 
 
 # HYPERPARAMETERS AND UTILITIES FOR TRAINING, EVAL DATASET PREP
-batch_size = 65536 #131072 #65536 #32768 #16384 #8192 #4096 #2048 #1024 works?
+batch_size = 2048 #131072 #65536 #32768 #16384 #8192 #4096 #2048 #1024 works?
 train_loader = DataLoaderLite(
     B=batch_size, 
     T=num_tokens_per_sample, 
@@ -60,12 +62,16 @@ train_loader = DataLoaderLite(
     eval_percentage=0.01
     )
 
-learning_rate = 0.04
+learning_rate = 0.01 #0.04
+weight_decay = 0.01
+max_grad_norm = 0.5
 trainset_size = train_loader.trainset_size
-epochs = int(300 * 1)
+epochs = int(75 * 1)
 max_steps = epochs * (trainset_size) // batch_size
-eval_intervals = max_steps // 10
-optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.02) # easy gains: decrease weights for different language tokens!
+eval_intervals = max_steps // 100
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay) # easy gains: decrease weights for different language tokens!
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max_steps, eta_min=1e-4) # claude considers this important
+
 
 pytorch_total_params = sum(p.numel() for p in model.parameters(recurse=True))
 print(f"Total number of parameters in model: {pytorch_total_params:,}")
@@ -143,9 +149,10 @@ for step in tqdm(range(max_steps), dynamic_ncols=True):
     logits, loss = model(x, y)
     writer.add_scalar("Loss/train", loss, step)
     loss.backward() # this adds to gradients! which is why we need to zero_grad
-    norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
+    norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
     # norm = 1
     optimizer.step() # this actually updates the params
+    scheduler.step()
     if (step !=0) & (step % eval_intervals == 0):
     # if False:
         with torch.no_grad():
@@ -153,20 +160,19 @@ for step in tqdm(range(max_steps), dynamic_ncols=True):
             # tqdm.write(f"step {step} | loss_train: {loss.item():.4f}")
             
             # em_score_reading = eval_naive() * 100
-            print("overwritting em score parallel")
             em_score_reading_parallel = 99999
-            # x_eval, y_eval = train_loader.next_batch_eval()
-            # x_eval, y_eval = x_eval.to(device), y_eval.to(device)
-            # logits_eval, loss_eval = model(x_eval, y_eval)
-            writer.add_scalar("Loss/eval", loss, step)
+            x_eval, y_eval = train_loader.next_batch_eval()
+            x_eval, y_eval = x_eval.to(device), y_eval.to(device)
+            logits_eval, loss_eval = model(x_eval, y_eval)
+            writer.add_scalar("Loss/eval", loss_eval.item(), step)
             em_score_reading_parallel = eval_parallel_claude() * 100
             # em_score_reading_parallel = eval_naive() * 100
-            tqdm.write(f"step {step} | loss_train: {loss.item():.4f} | loss_eval: {loss.item():.4f} | norm: {norm:.3f}| EM (parallel): {em_score_reading_parallel:.2f}%") #we use .item() because this is a tensor with a single element that lives on .device. .item() sends it to cpu
-            # accuracies.append(em_score_reading_parallel)
-            # accuracy_steps.append(step)
-            # losses_train.append(loss.item())
-            # losses_eval.append(loss_eval.item())
-            # writer.add_scalar("EM Score", em_score_reading_parallel, step)
+            tqdm.write(f"step {step} | loss_train: {loss.item():.4f} | loss_eval: {loss_eval.item():.4f} | norm: {norm:.3f}| EM (parallel): {em_score_reading_parallel:.2f}%") #we use .item() because this is a tensor with a single element that lives on .device. .item() sends it to cpu
+            accuracies.append(em_score_reading_parallel)
+            accuracy_steps.append(step)
+            losses_train.append(loss.item())
+            losses_eval.append(loss_eval.item())
+            writer.add_scalar("EM Score", em_score_reading_parallel, step)
 graph_inputs = [x,y]
 writer.add_graph(model, graph_inputs)
 writer.flush()
