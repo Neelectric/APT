@@ -37,7 +37,7 @@ data_location = 'datasets/no_bos_no_eos/499by499.json'
 tokenizer = ArithmeticTokenizer(vocab_path, max_length=num_tokens_per_sample, padding="max_length")
 config = APTConfig(vocab_size=len(tokenizer._id_tokens),
                    block_size=num_tokens_per_sample,
-                   n_layer=10,
+                   n_layer=12,
                    n_head=3,
                    n_embd=3,
                    bias=True,
@@ -51,7 +51,7 @@ model.tokenizer = tokenizer
 
 
 # HYPERPARAMETERS AND UTILITIES FOR TRAINING, EVAL DATASET PREP
-batch_size = 4096 #16384 #8192 #4096 #2048 #1024 works?
+batch_size = 65536 #131072 #65536 #32768 #16384 #8192 #4096 #2048 #1024 works?
 train_loader = DataLoaderLite(
     B=batch_size, 
     T=num_tokens_per_sample, 
@@ -62,7 +62,7 @@ train_loader = DataLoaderLite(
 
 learning_rate = 0.04
 trainset_size = train_loader.trainset_size
-epochs = int(125 * 1)
+epochs = int(300 * 1)
 max_steps = epochs * (trainset_size) // batch_size
 eval_intervals = max_steps // 10
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.02) # easy gains: decrease weights for different language tokens!
@@ -104,6 +104,30 @@ def eval_parallel(print_incorrect=False, max_length_eval_prompt=8, max_length=12
         print(f"Out of {len(eval_prompts)} questions, APT got {num_correct} correct.")
     return EM_score
 
+def eval_parallel_claude(print_incorrect=False, max_length_eval_prompt=8, max_length=12):
+    model.eval()
+    with torch.no_grad():
+        tokens = model.tokenizer(eval_prompts, return_tensors="pt", padding='max_length', 
+                                 max_length=max_length_eval_prompt, padding_side="left")["input_ids"].to(device)
+        
+        # Batched greedy autoregressive generation
+        for _ in range(max_length - max_length_eval_prompt):
+            logits, _ = model(tokens)
+            tokens = torch.cat([tokens, logits[:, -1, :].argmax(-1, keepdim=True)], dim=1)
+        
+        # Score
+        num_correct = 0
+        for gt, ids in zip(eval_ground_truths, tokens):
+            pred = "".join(model.tokenizer.batch_decode(ids[:-1].tolist(), skip_special_tokens=True))
+            if pred == gt:
+                num_correct += 1
+            elif print_incorrect:
+                print(gt, pred)
+        
+        if print_incorrect:
+            print(f"Out of {len(eval_prompts)} questions, APT got {num_correct} correct.")
+        return num_correct / len(eval_prompts)
+
 # TRAINING BEGINS
 losses_train = []
 losses_eval = []
@@ -135,8 +159,8 @@ for step in tqdm(range(max_steps), dynamic_ncols=True):
             # x_eval, y_eval = x_eval.to(device), y_eval.to(device)
             # logits_eval, loss_eval = model(x_eval, y_eval)
             writer.add_scalar("Loss/eval", loss, step)
-            # em_score_reading_parallel = eval_parallel() * 100
-            em_score_reading_parallel = eval_naive() * 100
+            em_score_reading_parallel = eval_parallel_claude() * 100
+            # em_score_reading_parallel = eval_naive() * 100
             tqdm.write(f"step {step} | loss_train: {loss.item():.4f} | loss_eval: {loss.item():.4f} | norm: {norm:.3f}| EM (parallel): {em_score_reading_parallel:.2f}%") #we use .item() because this is a tensor with a single element that lives on .device. .item() sends it to cpu
             # accuracies.append(em_score_reading_parallel)
             # accuracy_steps.append(step)
