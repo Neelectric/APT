@@ -99,10 +99,11 @@ class Block(nn.Module):
         super().__init__()
         self.config = config
         self.apt = weakref.ref(apt)
-        self.ln_1 = nn.LayerNorm(config.n_embd, bias=config.bias)
-        # self.ln_1 = nn.RMS
+        # self.ln_1 = nn.LayerNorm(config.n_embd, bias=config.bias)
+        self.ln_1 = nn.RMSNorm(config.n_embd)
         self.attn = CausalSelfAttention(config)
-        self.ln_2 = nn.LayerNorm(config.n_embd, bias=config.bias)
+        # self.ln_2 = nn.LayerNorm(config.n_embd, bias=config.bias)
+        self.ln_2 = nn.RMSNorm(config.n_embd)
         self.mlp = MLP(config)
 
     def forward(self, hidden_states):
@@ -172,14 +173,23 @@ class APT(nn.Module):
             # if config.pos_embd == 'learned':
             wpe = nn.Embedding(config.block_size, config.n_embd), # weight positional embeddings
             h = nn.ModuleList([Block(config, self) for _ in range(config.n_layer)]), # layers
-            ln_f = nn.LayerNorm(config.n_embd, bias=config.bias), # final layernorm, introduced by GPT2 paper
+            # ln_f = nn.LayerNorm(config.n_embd, bias=config.bias), # final layernorm, introduced by GPT2 paper
+            ln_f = nn.RMSNorm(config.n_embd)
         ))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=config.bias) # final classification head
         self.tokenizer = None # keeping this empty for now but in apt_print we need it for tokenizing and detokenizing
         self.current_input_ids = None # same as above!
+        
+        #initialisation scheme!
         for param in self.parameters():
             if len(param.shape) > 1:
                 nn.init.xavier_normal_(param)
+        #claude also suggests, with logic "at 6+ layers the residual contributions accumulate. The 1/sqrt(2*n_layer) scaling on c_proj (the output projection in both attention and MLP) keeps the signal stable at initialization."
+        for block in self.transformer.h:
+            block.attn.c_proj.weight.data *= 1 / math.sqrt(2 * config.n_layer)
+            block.mlp.c_proj.weight.data *= 1 / math.sqrt(2 * config.n_layer)
+                
+                
 
     def forward(self, input_ids, targets=None):
         self.current_input_ids = input_ids
@@ -278,20 +288,28 @@ class DataLoaderLite:
         if shuffle:
             random.shuffle(text)
         num_eval = int(eval_percentage * len(text))
-        eval_raw, train_raw = text[0:num_eval], text[num_eval+1:]
+        
+        eval_raw, train_raw = text[0:num_eval], text[num_eval:]
         self.trainset_size = len(train_raw)
         print(f"we have self.trainset_size {self.trainset_size}, and num_eval {num_eval}")
         # train = " ".join(train_raw)
         # eval = " ".join(eval_raw)
-        self.tokens_train = tokenizer(train_raw, return_tensors="pt", padding='max_length', max_length=self.max_length, padding_side="left")["input_ids"]
+        self.tokens_train = tokenizer(train_raw, return_tensors="pt", padding='max_length', max_length=self.max_length, padding_side="left")["input_ids"].pin_memory()
+        
+        self.train_raw = train_raw
         self.eval_raw = eval_raw
-        self.tokens_eval = tokenizer(eval_raw, return_tensors="pt", padding='max_length', max_length=self.max_length, padding_side="left")["input_ids"]
+        self.tokens_eval = tokenizer(eval_raw, return_tensors="pt", padding='max_length', max_length=self.max_length, padding_side="left")["input_ids"].pin_memory()
+        
         print(f"loaded {self.tokens_train.shape[0] * self.tokens_train.shape[1]} tokens")
         print(f"1 epoch = {len(self.tokens_train) // (B * T)} batches")
         self.current_position_train = 0
         self.current_position_eval = 0
         self.pad_token_id = tokenizer.pad_token_id
         self.eos_token_id = tokenizer.eos_token_id
+        digit_counts = {1: 0, 2: 0, 3: 0}
+        for row in eval_raw:
+            digit_counts[len(row.split('=')[1])] += 1
+        print(f"Eval split: 1-digit {100*digit_counts[1]/num_eval:.1f}%, 2-digit {100*digit_counts[2]/num_eval:.1f}%, 3-digit {100*digit_counts[3]/num_eval:.1f}%")
 
     def next_batch_train(self):
         B, T = self.B, self.T
