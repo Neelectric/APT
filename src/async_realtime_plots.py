@@ -7,13 +7,16 @@ from concurrent.futures import ThreadPoolExecutor
 sns.set_theme(style="darkgrid", palette="muted")
 _executor = ThreadPoolExecutor(max_workers=2)
 
-def _plot(steps, losses_train, losses_eval, norms, accuracies, acc_1d, acc_2d, acc_3d, config):
+def _plot(steps, losses_train, losses_eval, norms, accuracies, acc_1d, acc_2d, acc_3d, config, train_hparam_dict):
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(12, 10))
     fig.suptitle('APT Training Progress', fontsize=16, fontweight='bold', y=0.98)
     # Add config info to top right
     if config is not None:
-        config_text = (f"n_layer={config.n_layer}  n_head={config.n_head}\n"
-                       f"n_embd={config.n_embd}  mlp_exp={config.mlp_expansion_factor}")
+        hparams = ["".join(key + str(val)) for key, val in train_hparam_dict.items()]
+        hparam_string = ", ".join(hparams)
+        # print(hparam_string)
+        config_text = (f"n_layer={config.n_layer}  n_head={config.n_head} n_embd={config.n_embd}  mlp_exp={config.mlp_expansion_factor}\n"
+                       f"{hparam_string}")
         fig.text(0.98, 0.98, config_text, transform=fig.transFigure,
                  fontsize=10, verticalalignment='top', horizontalalignment='right',
                  fontfamily='monospace', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
@@ -55,5 +58,5 @@ def _plot(steps, losses_train, losses_eval, norms, accuracies, acc_1d, acc_2d, a
     plt.savefig('plots/current_run.png', dpi=120, facecolor='white', edgecolor='none')
     plt.close()
 
-def plot_async(steps, losses_train, losses_eval, norms, accuracies, acc_1d, acc_2d, acc_3d, config):
-    _executor.submit(_plot, list(steps), list(losses_train), list(losses_eval), list(norms), list(accuracies), list(acc_1d), list(acc_2d), list(acc_3d), config)
+def plot_async(steps, losses_train, losses_eval, norms, accuracies, acc_1d, acc_2d, acc_3d, config, train_hparam_dict):
+    _executor.submit(_plot, list(steps), list(losses_train), list(losses_eval), list(norms), list(accuracies), list(acc_1d), list(acc_2d), list(acc_3d), config, train_hparam_dict)

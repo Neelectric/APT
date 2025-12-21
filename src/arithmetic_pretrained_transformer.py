@@ -341,19 +341,70 @@ class DataLoaderLite:
         if self.current_position_eval + (B + 1) > len(self.tokens_eval):
             self.current_position_eval = 0
         return x,y
+
+
+### Claude wrote this!
+from torch.utils.data import Dataset, DataLoader
+
+class ArithmeticDataset(Dataset):
+    def __init__(self, tokens, pad_token_id, eos_token_id):
+        self.tokens = tokens
+        self.pad_token_id = pad_token_id
+        self.eos_token_id = eos_token_id
     
-    # def next_batch_eval(self):
-    #     B, T = self.B, self.T
-    #     B = math.floor(250/T)
-    #     buf = self.tokens_eval[self.current_position_eval : self.current_position_eval + B*T + 1]
-    #     x = (buf[:-1]).view(B, T) # inputs
-    #     y = (buf[1:]).view(B, T) # targets
-    #     # advance the current position in tensor
-    #     self.current_position_eval += B * T
-    #     # if loading next batch would be out of bounds, reset
-    #     if self.current_position_eval + (B * T + 1) > len(self.tokens_eval):
-    #         self.current_position_eval = 0
-    #     return x,y
+    def __len__(self):
+        return len(self.tokens)
+    
+    def __getitem__(self, idx):
+        x = self.tokens[idx]
+        y = torch.cat([x[1:], torch.tensor([self.eos_token_id], dtype=x.dtype)])
+        y[x == self.pad_token_id] = -100
+        return x, y
+
+class DataLoaderPyTorch:
+    def __init__(self, B, T, data_location, tokenizer, shuffle=True, eval_percentage=0.1, num_workers=8):
+        self.B = B
+        self.max_length = tokenizer.max_length
+        with open(data_location, 'r') as f:
+            text = json.load(f)
+        if shuffle:
+            random.shuffle(text)
+        num_eval = int(eval_percentage * len(text))
+        eval_raw, train_raw = text[0:num_eval], text[num_eval:]
+        self.trainset_size = len(train_raw)
+        self.train_raw = train_raw
+        self.eval_raw = eval_raw
+        print(f"we have self.trainset_size {self.trainset_size}, and num_eval {num_eval}")
+        tokens_train = tokenizer(train_raw, return_tensors="pt", padding='max_length', max_length=self.max_length, padding_side="left")["input_ids"]
+        tokens_eval = tokenizer(eval_raw, return_tensors="pt", padding='max_length', max_length=self.max_length, padding_side="left")["input_ids"]
+        print(f"loaded {tokens_train.shape[0] * tokens_train.shape[1]} tokens")
+        print(f"1 epoch = {len(tokens_train) // B} batches")
+        self.pad_token_id = tokenizer.pad_token_id
+        self.eos_token_id = tokenizer.eos_token_id
+        train_ds = ArithmeticDataset(tokens_train, self.pad_token_id, self.eos_token_id)
+        eval_ds = ArithmeticDataset(tokens_eval, self.pad_token_id, self.eos_token_id)
+        self._train_loader = DataLoader(train_ds, batch_size=B, shuffle=True, num_workers=num_workers, pin_memory=True, persistent_workers=num_workers>0, drop_last=True)
+        self._eval_loader = DataLoader(eval_ds, batch_size=B, shuffle=False, num_workers=num_workers, pin_memory=True, persistent_workers=num_workers>0)
+        self._train_iter = iter(self._train_loader)
+        self._eval_iter = iter(self._eval_loader)
+        digit_counts = {1: 0, 2: 0, 3: 0}
+        for row in eval_raw:
+            digit_counts[len(row.split('=')[1])] += 1
+        print(f"Eval split: 1-digit {100*digit_counts[1]/num_eval:.1f}%, 2-digit {100*digit_counts[2]/num_eval:.1f}%, 3-digit {100*digit_counts[3]/num_eval:.1f}%")
+
+    def next_batch_train(self):
+        try:
+            return next(self._train_iter)
+        except StopIteration:
+            self._train_iter = iter(self._train_loader)
+            return next(self._train_iter)
+
+    def next_batch_eval(self):
+        try:
+            return next(self._eval_iter)
+        except StopIteration:
+            self._eval_iter = iter(self._eval_loader)
+            return next(self._eval_iter)
     
 
 

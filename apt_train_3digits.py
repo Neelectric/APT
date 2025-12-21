@@ -9,7 +9,7 @@ import torch
 from tqdm import tqdm
 
 # Local imports
-from src.arithmetic_pretrained_transformer import APT, APTConfig, DataLoaderLite
+from src.arithmetic_pretrained_transformer import APT, APTConfig, DataLoaderLite, DataLoaderPyTorch
 from src.arithmetic_tokenizer import ArithmeticTokenizer
 from src.async_realtime_plots import plot_async
 
@@ -41,44 +41,73 @@ data_location = 'datasets/no_bos_no_eos/499by499.json'
 tokenizer = ArithmeticTokenizer(vocab_path, max_length=num_tokens_per_sample, padding="max_length")
 config = APTConfig(vocab_size=len(tokenizer._id_tokens),
                    block_size=num_tokens_per_sample,
-                   n_layer=4,
-                   n_head=2,
-                   n_embd=4,
+                   n_layer=6,
+                   n_head=1,
+                   n_embd=3,
                    mlp_expansion_factor=32,
                    bias=True,
                    pos_embd='learned',
                    )
 print(f"VOCAB SIZE IS {config.vocab_size}")
 model = APT(config)
+# model = torch.load("apt_checkpoints/base/6_1_3_32_600efinalized_model_bos_is_False.sav", 
+                #    map_location=device, weights_only=False)
+
 model.to(device)
 model.device = device
 model.tokenizer = tokenizer
-
+# 6,1,4,16 goes 1.2343 loss on 100 epochs.
+#8,3,3,32 goes 1.4243 loss on 50 epochs
+#8,1,3,32 goes 1.4112 loss on 50 epochs
+#6,1,3,32 goes to 1.2769 on 600 epochs
 
 # HYPERPARAMETERS AND UTILITIES FOR TRAINING, EVAL DATASET PREP
-batch_size = 2048 #131072 #65536 #32768 #16384 #8192 #4096 #2048 #1024 works?
-train_loader = DataLoaderLite(
+batch_size = 4096 #131072 #65536 #32768 #16384 #8192 #4096 #2048 #1024 works?
+
+# train_loader = DataLoaderLite(
+#     B=batch_size, 
+#     T=num_tokens_per_sample, 
+#     data_location=data_location, 
+#     tokenizer=tokenizer,
+#     eval_percentage=0.01
+#     )
+train_loader = DataLoaderPyTorch(
     B=batch_size, 
     T=num_tokens_per_sample, 
     data_location=data_location, 
     tokenizer=tokenizer,
-    eval_percentage=0.01
-    )
+    eval_percentage=0.01,
+    num_workers=0,
+)
 
-learning_rate = 0.03 #0.04
-weight_decay = 0.01
-max_grad_norm = 0.5
+peak_learning_rate = 0.035 #0.04
+min_learning_rate = 0.005
+weight_decay = 0.02
+max_grad_norm = 0.75
+epochs = int(800 * 1)
 trainset_size = train_loader.trainset_size
-epochs = int(300 * 1)
 max_steps = epochs * (trainset_size) // batch_size
-eval_intervals = max_steps // 50
-optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay) # easy gains: decrease weights for different language tokens!
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max_steps, eta_min=1e-4) # claude considers this important
+
+train_hparam_dict = {
+    "peak_learning_rate": peak_learning_rate,
+    # "min_learning_rate": min_learning_rate,
+    "weight_decay": weight_decay,
+    "max_grad_norm": max_grad_norm,
+    "batch_size": batch_size,
+    "trainset_size": trainset_size,
+    "epochs": epochs,
+    "max_steps": max_steps,
+    
+}
+
+eval_intervals = max_steps // 25
+optimizer = torch.optim.AdamW(model.parameters(), lr=peak_learning_rate, weight_decay=weight_decay) # easy gains: decrease weights for different language tokens!
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max_steps, eta_min=min_learning_rate) # claude considers this important
 
 
 pytorch_total_params = sum(p.numel() for p in model.parameters(recurse=True))
 print(f"Total number of parameters in model: {pytorch_total_params:,}")
-print(f"max_steps: {max_steps}, eval_intervals: {eval_intervals}, learning_rate: {learning_rate}")
+print(f"max_steps: {max_steps}, eval_intervals: {eval_intervals}, learning_rate: {peak_learning_rate}")
 
 
 eval_prompts = []
@@ -165,7 +194,7 @@ for step in tqdm(range(max_steps), dynamic_ncols=True):
     # writer.add_scalar("Loss/train", loss, step)
     loss.backward() # this adds to gradients! which is why we need to zero_grad
     norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
-    # norm = 1
+
     optimizer.step() # this actually updates the params
     scheduler.step()
     if (step !=0) & (step % eval_intervals == 0):
@@ -197,7 +226,18 @@ for step in tqdm(range(max_steps), dynamic_ncols=True):
             norms.append(norm.item())
             accuracies.append(em_score_reading_parallel)
             
-            plot_async(steps=eval_step_numbers, losses_train=losses_train, losses_eval=losses_eval, norms=norms, accuracies=accuracies, acc_1d=acc_1d_list, acc_2d=acc_2d_list, acc_3d=acc_3d_list, config=config)
+            plot_async(
+                steps=eval_step_numbers, 
+                losses_train=losses_train, 
+                losses_eval=losses_eval, 
+                norms=norms, 
+                accuracies=accuracies, 
+                acc_1d=acc_1d_list, 
+                acc_2d=acc_2d_list, 
+                acc_3d=acc_3d_list, 
+                config=config,
+                train_hparam_dict=train_hparam_dict,
+                )
             
             # writer.add_scalar("EM Score", em_score_reading_parallel, step)
 # graph_inputs = [x,y]
@@ -210,10 +250,10 @@ for step in tqdm(range(max_steps), dynamic_ncols=True):
 
 save = True
 if save:
-    filename = 'apt_checkpoints/base/finalized_model_bos_is_' + str(with_bos) + '.sav'
-    # before pickle dump we need to undo the weakref lol
-    model.convert_weakrefs_to_strongrefs()
-    pickle.dump(model, open(filename, 'wb'))
+    filename = 'apt_checkpoints/base/finalized_model_bos_is_' + str(with_bos) + '.pt'
+    # before pickle dump we need to undo the weakref lol, but for torch.save this messes things up!
+    # model.convert_weakrefs_to_strongrefs()
+    torch.save(model.state_dict(), filename)  # save only weights
     print(f"Saved APT file as pickle dump under {filename}")
 else:
     print("Save is false! We have not saved this model!")
