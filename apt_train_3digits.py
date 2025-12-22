@@ -80,11 +80,11 @@ train_loader = DataLoaderPyTorch(
     num_workers=0,
 )
 
-peak_learning_rate = 0.025 #0.04
+peak_learning_rate = 0.035 #0.04
 min_learning_rate = 0.005
 weight_decay = 0.02
 max_grad_norm = 0.75
-epochs = int(1000 * 1)
+epochs = int(1500 * 1)
 trainset_size = train_loader.trainset_size
 max_steps = epochs * (trainset_size) // batch_size
 
