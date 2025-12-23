@@ -12,6 +12,7 @@ from tqdm import tqdm
 from src.arithmetic_pretrained_transformer import APT, APTConfig, DataLoaderLite, DataLoaderPyTorch
 from src.arithmetic_tokenizer import ArithmeticTokenizer
 from src.async_realtime_plots import plot_async
+from src.evaluation import eval_naive, eval_parallel, eval_parallel_claude
 
 # Environment prep
 torch.manual_seed(42)
@@ -50,8 +51,7 @@ config = APTConfig(vocab_size=len(tokenizer._id_tokens),
                    )
 print(f"VOCAB SIZE IS {config.vocab_size}")
 model = APT(config)
-# model = torch.load("apt_checkpoints/base/6_1_3_32_600efinalized_model_bos_is_False.sav", 
-                #    map_location=device, weights_only=False)
+# model = torch.load("apt_checkpoints/base/6_1_3_32_600efinalized_model_bos_is_False.sav", map_location=device, weights_only=False)
 
 model.to(device)
 model.device = device
@@ -63,14 +63,12 @@ model.tokenizer = tokenizer
 
 # HYPERPARAMETERS AND UTILITIES FOR TRAINING, EVAL DATASET PREP
 batch_size = 4096 #131072 #65536 #32768 #16384 #8192 #4096 #2048 #1024 works?
+peak_learning_rate = 0.035 #0.04
+min_learning_rate = 0.005
+weight_decay = 0.02
+max_grad_norm = 0.75
+epochs = int(1500 * 1)
 
-# train_loader = DataLoaderLite(
-#     B=batch_size, 
-#     T=num_tokens_per_sample, 
-#     data_location=data_location, 
-#     tokenizer=tokenizer,
-#     eval_percentage=0.01
-#     )
 train_loader = DataLoaderPyTorch(
     B=batch_size, 
     T=num_tokens_per_sample, 
@@ -80,27 +78,21 @@ train_loader = DataLoaderPyTorch(
     num_workers=0,
 )
 
-peak_learning_rate = 0.035 #0.04
-min_learning_rate = 0.005
-weight_decay = 0.02
-max_grad_norm = 0.75
-epochs = int(1500 * 1)
 trainset_size = train_loader.trainset_size
 max_steps = epochs * (trainset_size) // batch_size
+eval_intervals = max_steps // 25
 
 train_hparam_dict = {
     "peak_learning_rate": peak_learning_rate,
-    # "min_learning_rate": min_learning_rate,
     "weight_decay": weight_decay,
     "max_grad_norm": max_grad_norm,
     "batch_size": batch_size,
     "trainset_size": trainset_size,
     "epochs": epochs,
     "max_steps": max_steps,
-    
 }
 
-eval_intervals = max_steps // 25
+### Optimizer and scheduler
 optimizer = torch.optim.AdamW(model.parameters(), lr=peak_learning_rate, weight_decay=weight_decay) # easy gains: decrease weights for different language tokens!
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max_steps, eta_min=min_learning_rate) # claude considers this important
 
@@ -110,72 +102,13 @@ print(f"Total number of parameters in model: {pytorch_total_params:,}")
 print(f"max_steps: {max_steps}, eval_intervals: {eval_intervals}, learning_rate: {peak_learning_rate}")
 
 
+# Prepare for eval and metric tracking
 eval_prompts = []
 eval_ground_truths = []
 for elt in train_loader.eval_raw:
     eval_prompts.append(elt.split("=")[0] + "=")
     eval_ground_truths.append(elt)
 
-def eval_naive(print_incorrect=False, max_length_eval_prompt=8, max_length=12):
-    num_correct = 0
-    for prompt, ground_truth in tqdm(zip(eval_prompts, eval_ground_truths), dynamic_ncols=True, disable=False, total=len(eval_prompts)):
-        prediction = model.answer(prompt, max_length_eval_prompt=max_length_eval_prompt, max_length=max_length)
-        if prediction == ground_truth:
-            num_correct += 1
-        elif print_incorrect:
-            print(ground_truth, prediction)
-    EM_score = num_correct/len(eval_prompts)
-    if print_incorrect:
-        print(f"Out of {len(eval_prompts)} questions, APT got {num_correct} correct.")
-    return EM_score
-
-def eval_parallel(print_incorrect=False, max_length_eval_prompt=8, max_length=12):
-    num_correct = 0
-    predictions = model.answer(eval_prompts, max_length_eval_prompt=max_length_eval_prompt, max_length=max_length)
-    for prediction, ground_truth in tqdm(zip(predictions, eval_ground_truths), dynamic_ncols=True, disable=True):
-        if prediction == ground_truth:
-            num_correct += 1
-        elif print_incorrect:
-            print(ground_truth, prediction)
-    EM_score = num_correct/len(eval_prompts)
-    if print_incorrect:
-        print(f"Out of {len(eval_prompts)} questions, APT got {num_correct} correct.")
-    return EM_score
-
-@torch.inference_mode()
-def eval_parallel_claude(print_incorrect=False, max_length_eval_prompt=8, max_length=12):
-    model.eval()
-    tokens = model.tokenizer(eval_prompts, return_tensors="pt", padding='max_length', 
-                                max_length=max_length_eval_prompt, padding_side="left")["input_ids"].to(device)
-    
-    for _ in range(max_length - max_length_eval_prompt):
-        logits, _ = model(tokens)
-        tokens = torch.cat([tokens, logits[:, -1, :].argmax(-1, keepdim=True)], dim=1)
-    
-    # Score by digit count
-    correct = {1: 0, 2: 0, 3: 0}
-    total = {1: 0, 2: 0, 3: 0}
-    num_correct = 0
-    
-    for gt, ids in zip(eval_ground_truths, tokens):
-        answer = gt.split('=')[1]
-        n_digits = len(answer)
-        total[n_digits] += 1
-        
-        pred = "".join(model.tokenizer.batch_decode(ids[:-1].tolist(), skip_special_tokens=True))
-        if pred == gt:
-            num_correct += 1
-            correct[n_digits] += 1
-        elif print_incorrect:
-            print(gt, pred)
-    
-    if print_incorrect:
-        print(f"Out of {len(eval_prompts)} questions, APT got {num_correct} correct.")
-    
-    acc_by_digits = {k: 100 * correct[k] / total[k] if total[k] > 0 else 0 for k in [1, 2, 3]}
-    return num_correct / len(eval_prompts), acc_by_digits
-
-# TRAINING BEGINS
 losses_train = []
 losses_eval = []
 accuracies = []
@@ -184,32 +117,28 @@ eval_step_numbers = []
 acc_1d_list, acc_2d_list, acc_3d_list = [], [], []
 
 
+# core training loop
 for step in tqdm(range(max_steps), dynamic_ncols=True):
     model.train()
     x, y = train_loader.next_batch_train()
     x, y = x.to(device, non_blocking=True), y.to(device, non_blocking=True)
-    # y[:,0:5] = -100
     optimizer.zero_grad() # always need to start with 0 gradient
     logits, loss = model(x, y)
     # writer.add_scalar("Loss/train", loss, step)
     loss.backward() # this adds to gradients! which is why we need to zero_grad
     norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
-
     optimizer.step() # this actually updates the params
     scheduler.step()
     if (step !=0) & (step % eval_intervals == 0):
-    # if False:
         with torch.no_grad():
             model.eval()
-            # tqdm.write(f"step {step} | loss_train: {loss.item():.4f}")
-            
             # em_score_reading = eval_naive() * 100
             em_score_reading_parallel = 99999
             x_eval, y_eval = train_loader.next_batch_eval()
             x_eval, y_eval = x_eval.to(device), y_eval.to(device)
             logits_eval, loss_eval = model(x_eval, y_eval)
             # writer.add_scalar("Loss/eval", loss_eval.item(), step)
-            em_score, acc_by_digits = eval_parallel_claude()
+            em_score, acc_by_digits = eval_parallel_claude(model, eval_prompts, eval_ground_truths)
             em_score_reading_parallel = em_score * 100
 
             acc_1d_list.append(acc_by_digits[1])
