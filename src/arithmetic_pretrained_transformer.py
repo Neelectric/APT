@@ -1,4 +1,5 @@
-"""Implements a function-complete transformer architecture for addition"""
+"""Implements a function-complete transformer architecture for arithmetic."""
+
 # System imports
 import math
 import json
@@ -54,7 +55,6 @@ class CausalSelfAttention(nn.Module):
         # calculate q, k and v for all heads in batch and move head forward to be the batch
         # nh is num_heads, hs is head_size, C (number of channels) is nh * ns
         # so for GPT-2 (124M), n_head=12, hs=64, nh*hs=C=768 channels in transformer
-        # pickle.dump(x, open("random_pickles/x.sav", 'wb'))
         qkv = self.c_attn(x)
         queries, keys, values = qkv.split(self.n_embd, dim=2)
         queries = queries.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
@@ -99,6 +99,7 @@ class Block(nn.Module):
         super().__init__()
         self.config = config
         self.apt = weakref.ref(apt)
+        # keeping option to switch back to legacy LayerNorm, though RMSNorm looks strictly better so far empirically (and makes more sense intuitively)
         # self.ln_1 = nn.LayerNorm(config.n_embd, bias=config.bias)
         self.ln_1 = nn.RMSNorm(config.n_embd)
         self.attn = CausalSelfAttention(config)
@@ -189,8 +190,6 @@ class APT(nn.Module):
             block.attn.c_proj.weight.data *= 1 / math.sqrt(2 * config.n_layer)
             block.mlp.c_proj.weight.data *= 1 / math.sqrt(2 * config.n_layer)
                 
-                
-
     def forward(self, input_ids, targets=None):
         self.current_input_ids = input_ids
         # input_ids is of shape (B, T), but sometimes just a single sequence, in which case we unsqueeze to make it a batch of size 1:
@@ -281,8 +280,6 @@ class DataLoaderLite:
         self.B = B
         self.T = T
         self.max_length = tokenizer.max_length
-        # vocab_path = 'tokenizer/vocab.json'
-        # tokenizer = APTTokenizer(vocab_path)
         with open(data_location, 'r') as f:
             text = json.load(f)
         if shuffle:
@@ -292,8 +289,6 @@ class DataLoaderLite:
         eval_raw, train_raw = text[0:num_eval], text[num_eval:]
         self.trainset_size = len(train_raw)
         print(f"we have self.trainset_size {self.trainset_size}, and num_eval {num_eval}")
-        # train = " ".join(train_raw)
-        # eval = " ".join(eval_raw)
         self.tokens_train = tokenizer(train_raw, return_tensors="pt", padding='max_length', max_length=self.max_length, padding_side="left")["input_ids"].pin_memory()
         
         self.train_raw = train_raw
