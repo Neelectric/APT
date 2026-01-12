@@ -167,20 +167,11 @@ for step in tqdm(range(max_steps), dynamic_ncols=True):
                 config=config,
                 train_hparam_dict=train_hparam_dict,
                 )
-            
-            # writer.add_scalar("EM Score", em_score_reading_parallel, step)
-# graph_inputs = [x,y]
-# writer.add_graph(model, graph_inputs)
-# writer.flush()
-# writer.close()
-    
-# final_em_score_reading = eval_naive(print_incorrect=True) * 100
-# print(f"step {step}, train loss: {loss.item():.4f}, eval accuracy (EM): {final_em_score_reading:.2f}%") 
 
 save = True
 if save:
     filename = 'apt_checkpoints/base/finalized_model_bos_is_' + str(with_bos) + '.pt'
-    # before pickle dump we need to undo the weakref lol, but for torch.save this messes things up!
+    # before pickle dump we need to undo the weakref, but for torch.save this messes things up!
     # model.convert_weakrefs_to_strongrefs()
     torch.save(model.state_dict(), filename)  # save only weights
     print(f"Saved APT file as pickle dump under {filename}")
