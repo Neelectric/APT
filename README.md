@@ -4,9 +4,9 @@ A mechanistic interpretability study of how transformer models learn algorithmic
 
 ## Training Progress
 
-![Training Progress](plots/current_run.png)
+![Training Progress](plots/4_2_4_32_90%.png.png)
 
-Current model achieves >95% exact match accuracy on 3-digit addition problems using a 4-layer transformer with minimal parameters.
+The most recent run achieved ~90% exact match accuracy on 3-digit addition problems using a 4-layer transformer with minimal parameters.
 
 ## Architecture
 
