@@ -12,7 +12,7 @@ from tqdm import tqdm
 from src.arithmetic_pretrained_transformer import APT, APTConfig, DataLoaderLite, DataLoaderPyTorch
 from src.arithmetic_tokenizer import ArithmeticTokenizer
 from src.async_realtime_plots import plot_async
-from src.evaluation import eval_naive, eval_parallel, eval_parallel_claude
+from src.evaluation import eval_naive, eval_parallel, eval_parallel_claude, make_balanced_eval_lists, eval_matched_padding
 
 # Environment prep
 torch.manual_seed(42)
@@ -42,9 +42,9 @@ data_location = 'datasets/no_bos_no_eos/499by499.json'
 tokenizer = ArithmeticTokenizer(vocab_path, max_length=num_tokens_per_sample, padding="max_length")
 config = APTConfig(vocab_size=len(tokenizer._id_tokens),
                    block_size=num_tokens_per_sample,
-                   n_layer=6,
-                   n_head=1,
-                   n_embd=3,
+                   n_layer=4,
+                   n_head=2,
+                   n_embd=4,
                    mlp_expansion_factor=32,
                    bias=True,
                    pos_embd='learned',
@@ -62,12 +62,12 @@ model.tokenizer = tokenizer
 #6,1,3,32 goes to 1.2769 on 600 epochs
 
 # HYPERPARAMETERS AND UTILITIES FOR TRAINING, EVAL DATASET PREP
-batch_size = 4096 #131072 #65536 #32768 #16384 #8192 #4096 #2048 #1024 works?
+batch_size = 8192 #131072 #65536 #32768 #16384 #8192 #4096 #2048 #1024 works?
 peak_learning_rate = 0.035 #0.04
 min_learning_rate = 0.005
-weight_decay = 0.02
-max_grad_norm = 0.75
-epochs = int(2000 * 1)
+weight_decay = 0.01
+max_grad_norm = 1.0
+epochs = int(600 * 1)
 
 train_loader = DataLoaderPyTorch(
     B=batch_size, 
@@ -80,7 +80,7 @@ train_loader = DataLoaderPyTorch(
 
 trainset_size = train_loader.trainset_size
 max_steps = epochs * (trainset_size) // batch_size
-eval_intervals = max_steps // 25
+eval_intervals = max_steps // 200
 
 train_hparam_dict = {
     "peak_learning_rate": peak_learning_rate,
@@ -102,12 +102,13 @@ print(f"Total number of parameters in model: {pytorch_total_params:,}")
 print(f"max_steps: {max_steps}, eval_intervals: {eval_intervals}, learning_rate: {peak_learning_rate}")
 
 
-# Prepare for eval and metric tracking
-eval_prompts = []
-eval_ground_truths = []
-for elt in train_loader.eval_raw:
-    eval_prompts.append(elt.split("=")[0] + "=")
-    eval_ground_truths.append(elt)
+# Build balanced eval lists once, before the training loop
+_, eval_prompts, eval_ground_truths = make_balanced_eval_lists(
+    data_location, n_per_bucket=25
+)
+# Sanity check
+print({len(g.split('=')[1]): sum(1 for x in eval_ground_truths if len(x.split('=')[1]) == len(g.split('=')[1])) for g in eval_ground_truths})
+
 
 losses_train = []
 losses_eval = []
@@ -138,7 +139,8 @@ for step in tqdm(range(max_steps), dynamic_ncols=True):
             x_eval, y_eval = x_eval.to(device), y_eval.to(device)
             logits_eval, loss_eval = model(x_eval, y_eval)
             # writer.add_scalar("Loss/eval", loss_eval.item(), step)
-            em_score, acc_by_digits = eval_parallel_claude(model, eval_prompts, eval_ground_truths)
+            # em_score, acc_by_digits = eval_parallel_claude(model, eval_prompts, eval_ground_truths)
+            em_score, acc_by_digits = eval_matched_padding(model, eval_prompts, eval_ground_truths)
             em_score_reading_parallel = em_score * 100
 
             acc_1d_list.append(acc_by_digits[1])

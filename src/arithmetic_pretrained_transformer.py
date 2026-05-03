@@ -167,7 +167,6 @@ class APT(nn.Module):
         super().__init__()
         self.config = config
         print("Add different options for learned vs rotational vs alibi positional encodings!!!")
-        print("Swap layernorm to RMSNorm!")
 
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(num_embeddings=config.vocab_size, embedding_dim=config.n_embd), # weight token embeddings

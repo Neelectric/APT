@@ -1,5 +1,8 @@
 # plotting.py
+import matplotlib
+matplotlib.use('Agg') # Forces a non-GUI backend
 import matplotlib.pyplot as plt
+
 import seaborn as sns
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
@@ -35,22 +38,22 @@ def _plot(steps, losses_train, losses_eval, norms, accuracies, acc_1d, acc_2d, a
     ax2.set_title('Gradient Norms')
     
     ax3.plot(steps, accuracies, color='seagreen', linewidth=2)
-    ax3.axhline(y=100, color='red', linestyle=':', alpha=0.7, label='Target')
+    # ax3.axhline(y=100, color='red', linestyle=':', alpha=0.7, label='Target')
     ax3.set_xlabel('Step')
     ax3.set_ylabel('EM %')
     ax3.set_title('Exact Match Accuracy')
     ax3.set_ylim(bottom=0)
     ax3.set_yticks(np.arange(0, 110, step=10))
-    ax3.legend(frameon=True)
+    # ax3.legend(frameon=True)
     
     ax4.plot(steps, acc_1d, label='1-digit', linewidth=2)
     ax4.plot(steps, acc_2d, label='2-digit', linewidth=2)
     ax4.plot(steps, acc_3d, label='3-digit', linewidth=2)
-    ax4.axhline(y=100, color='gold', linestyle=':', alpha=0.7)
+    # ax4.axhline(y=100, color='gold', linestyle=':', alpha=0.7)
     ax4.set_xlabel('Step')
     ax4.set_ylabel('EM %')
     ax4.set_title('Accuracy by Answer Length')
-    ax4.set_ylim(bottom=0)
+    ax4.set_ylim(bottom=0, top=100)
     ax4.legend(frameon=True)
 
     
